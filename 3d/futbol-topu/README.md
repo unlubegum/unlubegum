@@ -32,6 +32,22 @@ Alt kısmı düz kesik; destek gerekmeden basılır ve pastada devrilmez. Altta 
 - Destek: **kapalı**; alt düz yüzey tablaya oturur
 - Tek renkli baskıda: dilimleyicide 3 büyük + 2 orta kopya ekle, hepsini tek seferde bas
 
+## Tam yuvarlak versiyon (iki yarım küre)
+
+![yarım küreler](yarim_onizleme.png)
+
+`stl/yarim/` klasöründe. Her top iki yarım olarak basılıp yapıştırılır; iki yarım da düz yüzü tablada, **desteksiz** basılır.
+
+- **Snapmaker U1:** `tabla-yarim-3-buyuk-2-orta-iki-renk.3mf` → 10 yarım tek tablada, `beyaz`/`siyah` parçalarına filament ata.
+- **Tek renk:** `yarim-XXmm-ust-tek-renk.stl` + `yarim-XXmm-alt-tek-renk.stl`.
+
+**Birleştirme:**
+1. Her yarımın düz yüzünde 3 delik var. 1,75 mm filamentten **~5,5 mm**'lik 3 parça kes, bir yarımın deliklerine tak.
+2. Düz yüzlere ince bir kat hızlı yapıştırıcı (japon yapıştırıcısı) sür, diğer yarımı pimlere oturt. Deliklerden biri farklı mesafede olduğu için yarımlar yalnızca doğru açıda birleşir, desen tam oturur.
+3. Ek yeri desenin içinden geçer; gerekirse ince zımparayla düzelt.
+
+Alt yarımın kutbunda kürdan/çubuk deliği var; top pastaya bununla sabitlenir.
+
 ## Gıda güvenliği
 
 PLA gıdaya temas için onaylı değildir. Topları doğrudan kremaya değil, şeker hamuru üstüne ya da altına
@@ -43,4 +59,5 @@ streç film/kürdan kullanarak koyun.
 pip install trimesh manifold3d networkx lxml scipy
 python3 futbol_topu.py   # stl/ klasörünü üretir
 python3 onizleme.py      # onizleme.png
+python3 yarim_top.py     # stl/yarim/ (iki yarım küre)
 ```

@@ -66,7 +66,8 @@ def to_trimesh(man):
     return trimesh.util.concatenate(parts)
 
 
-def ball(diam):
+def grooved_sphere(diam):
+    """Dikiş oyuklu tam küre (merkez orijinde)."""
     R = diam / 2
     sph = trimesh.creation.icosphere(subdivisions=7 if diam > 40 else 6)
     u = sph.vertices / np.linalg.norm(sph.vertices, axis=1, keepdims=True)
@@ -78,15 +79,11 @@ def ball(diam):
     x = np.clip(dist / (GROOVE_W / 2), 0, 1)
     r = R - GROOVE_D * (1 - x ** 2) * (x < 1)
     sph.vertices = u * r[:, None]
-    body = to_manifold(sph)
+    return to_manifold(sph)
 
-    # Alt düz kesim + çubuk deliği
-    big = 4 * R
-    body = body - mf.Manifold.cube([big, big, big], center=True).translate([0, 0, -R * CUT - big / 2])
-    hole = mf.Manifold.cylinder(R * 0.9, HOLE_D / 2, HOLE_D / 2, 32).translate([0, 0, -R * CUT - 0.1])
-    body = body - hole
 
-    # Siyah beşgenler: beşgen konileri ∩ top − iç küre
+def pent_shell(R):
+    """Siyah beşgenlerin dış kabuğu: beşgen konileri − iç küre."""
     cones = None
     for (pts, pent) in faces:
         if not pent:
@@ -96,8 +93,18 @@ def ball(diam):
         pts = ctr + (pts - ctr) * (1 - 0.2 / (0.357 * R))
         hull = mf.Manifold.hull_points(np.vstack([[0, 0, 0], pts / np.linalg.norm(pts, axis=1, keepdims=True) * 3 * R]))
         cones = hull if cones is None else cones + hull
-    inner = mf.Manifold.sphere(R - GROOVE_D - BLACK_T, 256)
-    shell = cones - inner
+    return cones - mf.Manifold.sphere(R - GROOVE_D - BLACK_T, 256)
+
+
+def ball(diam):
+    R = diam / 2
+    body = grooved_sphere(diam)
+    # Alt düz kesim + çubuk deliği
+    big = 4 * R
+    body = body - mf.Manifold.cube([big, big, big], center=True).translate([0, 0, -R * CUT - big / 2])
+    hole = mf.Manifold.cylinder(R * 0.9, HOLE_D / 2, HOLE_D / 2, 32).translate([0, 0, -R * CUT - 0.1])
+    body = body - hole
+    shell = pent_shell(R)
     black = body ^ shell
     white = body - shell
     # Yere otursun
