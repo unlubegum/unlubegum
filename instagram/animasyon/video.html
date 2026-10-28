@@ -85,10 +85,35 @@ const bounce = t => Math.abs(Math.sin(t * Math.PI / BEAT)); // her vuruşta bir 
 const $ = id => document.getElementById(id);
 
 // ---------- Karakter çizimi ----------
+// Kıvırcık saç: kenarlarda omuza inen bukleler, önde kıvırcık perçem
+const SIDE_CURLS = [[124,130,24],[110,165,25],[106,200,25],[110,236,24],[118,268,23],[136,292,21]];
+const TOP_CURLS = [[138,142,22],[160,116,25],[198,106,27],[236,114,25],[262,140,22],[124,165,18],[276,166,18]];
+function curls(list, fill, hi, mirror) {
+  let d = "";
+  for (const [x, y, r] of list) {
+    const xs = mirror ? [x, 400 - x] : [x];
+    for (const cx of xs) {
+      d += `<circle cx="${cx}" cy="${y}" r="${r}" fill="${fill}"/>`;
+      d += `<path d="M${cx - r * .45} ${y} a${r * .45} ${r * .45} 0 1 1 ${r * .5} ${r * .35}" stroke="${hi}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
+    }
+  }
+  return d;
+}
+function eyes(iris) {
+  return [175, 225].map(x => iris
+    ? `<circle cx="${x}" cy="182" r="9" fill="${iris}"/><circle cx="${x}" cy="182" r="4.6" fill="#2d3436"/><circle cx="${x + 3}" cy="178.5" r="2.6" fill="#fff"/>`
+    : `<circle cx="${x}" cy="182" r="7.5" fill="#2d3436"/><circle cx="${x + 2.5}" cy="179.5" r="2.4" fill="#fff"/>`).join("");
+}
 function person(id, o) {
+  const hairBack = o.curly
+    ? `<g id="${id}-hairback"><path d="M118 150 Q100 285 140 300 L260 300 Q300 285 282 150 Z" fill="${o.hair}"/>${curls(SIDE_CURLS, o.hair, o.hairHi, true)}</g>`
+    : `<path id="${id}-hairback" d="M118 170 Q105 285 150 295 L250 295 Q295 285 282 170 Z" fill="${o.hair}"/>`;
+  const bangs = o.curly
+    ? curls(TOP_CURLS, o.hair, o.hairHi, false)
+    : `<path d="M130 162 Q148 96 200 100 Q255 96 272 166 Q240 126 200 132 Q164 128 130 162 Z" fill="${o.hair}"/>`;
   return `
   <g id="${id}">
-    <path id="${id}-hairback" d="M118 170 Q105 285 150 295 L250 295 Q295 285 282 170 Z" fill="${o.hair}"/>
+    ${hairBack}
     <rect x="150" y="420" width="40" height="140" rx="12" fill="${o.pants}"/>
     <rect x="210" y="420" width="40" height="140" rx="12" fill="${o.pants}"/>
     <ellipse cx="166" cy="565" rx="30" ry="13" fill="#2d3436"/>
@@ -96,13 +121,10 @@ function person(id, o) {
     <path id="${id}-torso" d="M135 250 Q200 236 265 250 L285 440 Q200 456 115 440 Z" fill="${o.shirt}"/>
     <rect x="185" y="225" width="30" height="32" fill="${o.skin}"/>
     <g id="${id}-head">
-      <circle id="${id}-bun" cx="200" cy="90" r="34" fill="${o.hair}"/>
+      <circle id="${id}-bun" cx="200" cy="90" r="34" fill="${o.hair}" style="${o.curly ? "display:none" : ""}"/>
       <circle cx="200" cy="175" r="70" fill="${o.skin}"/>
-      <path d="M130 162 Q148 96 200 100 Q255 96 272 166 Q240 126 200 132 Q164 128 130 162 Z" fill="${o.hair}"/>
-      <g id="${id}-eyes">
-        <circle cx="175" cy="182" r="7.5" fill="#2d3436"/><circle cx="225" cy="182" r="7.5" fill="#2d3436"/>
-        <circle cx="177.5" cy="179.5" r="2.4" fill="#fff"/><circle cx="227.5" cy="179.5" r="2.4" fill="#fff"/>
-      </g>
+      ${bangs}
+      <g id="${id}-eyes">${eyes(o.iris)}</g>
       <g id="${id}-eyesX" stroke="#2d3436" stroke-width="5" stroke-linecap="round" style="display:none">
         <path d="M167 174 L183 190 M183 174 L167 190"/><path d="M217 174 L233 190 M233 174 L217 190"/>
       </g>
@@ -192,27 +214,40 @@ $("svg").innerHTML = `
   </g>
 
   <!-- Kızım (4 yaş) — anne sahnesi -->
+  <defs>
+    <pattern id="flowers" width="22" height="22" patternUnits="userSpaceOnUse">
+      <rect width="22" height="22" fill="#efe4fb"/>
+      <g fill="#8e7cc3"><circle cx="6" cy="6" r="2.6"/><circle cx="3" cy="4" r="2.2"/><circle cx="9" cy="4" r="2.2"/><circle cx="4" cy="9" r="2.2"/><circle cx="8" cy="9" r="2.2"/></g>
+      <circle cx="6" cy="6.5" r="1.4" fill="#fdcb6e"/>
+      <g fill="#f8a5c2"><circle cx="17" cy="16" r="2"/><circle cx="15" cy="14" r="1.8"/><circle cx="19" cy="14" r="1.8"/></g>
+      <circle cx="16" cy="4" r="1.6" fill="#55c4a0"/>
+    </pattern>
+  </defs>
   <g id="girl" style="display:none">
     <ellipse cx="0" cy="168" rx="40" ry="9" fill="#000" opacity=".12"/>
-    <rect x="-20" y="105" width="14" height="60" rx="7" fill="#f6c9a8"/><rect x="6" y="105" width="14" height="60" rx="7" fill="#f6c9a8"/>
-    <ellipse cx="-13" cy="166" rx="14" ry="7" fill="#e84393"/><ellipse cx="13" cy="166" rx="14" ry="7" fill="#e84393"/>
-    <path d="M-22 40 L22 40 L42 115 L-42 115 Z" fill="#fd79a8"/>
-    <circle cx="-8" cy="80" r="5" fill="#fff"/><circle cx="12" cy="95" r="5" fill="#fff"/><circle cx="-20" cy="105" r="5" fill="#fff"/>
-    <line id="girl-arm" x1="-15" y1="50" x2="-50" y2="20" stroke="#fd79a8" stroke-width="13" stroke-linecap="round"/>
-    <circle id="girl-hand" cx="-50" cy="20" r="8" fill="#f6c9a8"/>
-    <line x1="15" y1="50" x2="35" y2="85" stroke="#fd79a8" stroke-width="13" stroke-linecap="round"/>
-    <circle cx="35" cy="85" r="8" fill="#f6c9a8"/>
-    <g id="girl-pig-l"><circle cx="-42" cy="-12" r="15" fill="#4a2c1d"/><circle cx="-34" cy="-22" r="6" fill="#fdcb6e"/></g>
-    <g id="girl-pig-r"><circle cx="42" cy="-12" r="15" fill="#4a2c1d"/><circle cx="34" cy="-22" r="6" fill="#fdcb6e"/></g>
-    <circle cx="0" cy="0" r="38" fill="#f6c9a8"/>
-    <path d="M-38 -4 Q-30 -44 0 -42 Q30 -44 38 -4 Q20 -24 0 -22 Q-20 -24 -38 -4 Z" fill="#4a2c1d"/>
-    <circle cx="-13" cy="4" r="5" fill="#2d3436"/><circle cx="13" cy="4" r="5" fill="#2d3436"/>
+    <g id="girl-hairback">
+      <path d="M-40 -6 Q-56 50 -40 78 Q-30 90 -18 70 L18 70 Q30 90 40 78 Q56 50 40 -6 Z" fill="#5a3a24"/>
+      <circle cx="-42" cy="40" r="13" fill="#5a3a24"/><circle cx="-40" cy="66" r="12" fill="#5a3a24"/>
+      <circle cx="42" cy="40" r="13" fill="#5a3a24"/><circle cx="40" cy="66" r="12" fill="#5a3a24"/>
+    </g>
+    <rect x="-20" y="105" width="14" height="60" rx="7" fill="#f6cdb2"/><rect x="6" y="105" width="14" height="60" rx="7" fill="#f6cdb2"/>
+    <ellipse cx="-13" cy="166" rx="14" ry="7" fill="#a29bfe"/><ellipse cx="13" cy="166" rx="14" ry="7" fill="#a29bfe"/>
+    <path d="M-22 40 L22 40 L44 118 L-44 118 Z" fill="url(#flowers)" stroke="#c9b6ec" stroke-width="2"/>
+    <line id="girl-arm" x1="-15" y1="50" x2="-50" y2="20" stroke="#f6cdb2" stroke-width="12" stroke-linecap="round"/>
+    <circle id="girl-hand" cx="-50" cy="20" r="8" fill="#f6cdb2"/>
+    <line x1="15" y1="50" x2="35" y2="85" stroke="#f6cdb2" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="35" cy="85" r="8" fill="#f6cdb2"/>
+    <circle cx="0" cy="0" r="38" fill="#f6cdb2"/>
+    <path d="M-39 6 Q-36 -42 0 -42 Q36 -42 39 6 Q30 -18 6 -26 Q-2 -14 -24 -18 Q-34 -10 -39 6 Z" fill="#5a3a24"/>
+    <g id="girl-clip" transform="translate(2,-40)"><path d="M-12 -6 L12 6 M-12 6 L12 -6" stroke="#d4a017" stroke-width="5" stroke-linecap="round"/><circle r="4" fill="#fdcb6e"/></g>
+    <circle cx="-13" cy="4" r="5.5" fill="#4a2c1d"/><circle cx="13" cy="4" r="5.5" fill="#4a2c1d"/>
+    <circle cx="-11.5" cy="2.5" r="1.8" fill="#fff"/><circle cx="14.5" cy="2.5" r="1.8" fill="#fff"/>
     <circle cx="-22" cy="16" r="6" fill="#ff7675" opacity=".5"/><circle cx="22" cy="16" r="6" fill="#ff7675" opacity=".5"/>
     <ellipse id="girl-mouth" cx="0" cy="20" rx="7" ry="6" fill="#8b3a2e"/>
   </g>
 
   <g id="char" transform="translate(70,300)">
-    ${person("b", { skin: "#f6c9a8", hair: "#4a2c1d", shirt: "#ffffff", pants: "#34495e" })}
+    ${person("b", { skin: "#f6cdb2", hair: "#6b4a30", hairHi: "#a8835c", iris: "#7d9ea3", curly: true, shirt: "#ffffff", pants: "#34495e" })}
   </g>
   <g id="annep" style="display:none" transform="translate(70,300)">
     ${person("a", { skin: "#f1c27d", hair: "#b2bec3", shirt: "#6c5ce7", pants: "#5d4037" })}
@@ -220,9 +255,12 @@ $("svg").innerHTML = `
 
   <!-- Kapıdan bakan Begüm (anne sahnesi) -->
   <g id="peek" style="display:none">
-    <circle cx="0" cy="-80" r="26" fill="#4a2c1d"/>
-    <circle cx="0" cy="0" r="62" fill="#f6c9a8"/>
-    <path d="M-62 -8 Q-46 -66 0 -62 Q48 -66 62 -4 Q34 -40 0 -36 Q-32 -40 -62 -8 Z" fill="#4a2c1d"/>
+    <g fill="#6b4a30">
+      <circle cx="-60" cy="-10" r="22"/><circle cx="-66" cy="22" r="20"/><circle cx="-60" cy="52" r="18"/>
+      <circle cx="60" cy="-10" r="22"/><circle cx="66" cy="22" r="20"/><circle cx="60" cy="52" r="18"/>
+    </g>
+    <circle cx="0" cy="0" r="62" fill="#f6cdb2"/>
+    <g fill="#6b4a30"><circle cx="-44" cy="-34" r="22"/><circle cx="-18" cy="-56" r="24"/><circle cx="16" cy="-58" r="24"/><circle cx="44" cy="-36" r="22"/></g>
     <g id="peek-happy">
       <text x="-30" y="12" font-size="22" text-anchor="middle">✨</text><text x="30" y="12" font-size="22" text-anchor="middle">✨</text>
       <path d="M-16 26 Q0 42 16 26" stroke="#8b3a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
@@ -232,7 +270,7 @@ $("svg").innerHTML = `
       <path d="M-16 36 Q0 22 16 36" stroke="#8b3a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
       <path d="M-28 14 Q-31 24 -28 28 Q-25 24 -28 14 Z" fill="#74b9ff"/>
     </g>
-    <circle cx="-14" cy="62" r="13" fill="#f6c9a8"/><circle cx="14" cy="62" r="13" fill="#f6c9a8"/>
+    <circle cx="-14" cy="62" r="13" fill="#f6cdb2"/><circle cx="14" cy="62" r="13" fill="#f6cdb2"/>
   </g>
   <g id="fx"></g>
 `;
@@ -245,9 +283,9 @@ const PROPS = {
       <circle cx="175" cy="182" r="19" fill="rgba(255,255,255,.25)" stroke="#2d3436" stroke-width="4.5"/>
       <circle cx="225" cy="182" r="19" fill="rgba(255,255,255,.25)" stroke="#2d3436" stroke-width="4.5"/>
       <line x1="194" y1="182" x2="206" y2="182" stroke="#2d3436" stroke-width="4.5"/>
-      <path d="M125 138 Q128 66 200 64 Q272 66 275 138 Z" fill="#fdcb6e"/>
-      <rect x="108" y="128" width="184" height="16" rx="8" fill="#e1a12c"/>
-      <rect x="192" y="68" width="16" height="64" rx="6" fill="#e1a12c"/>
+      <path d="M118 138 Q122 58 200 56 Q278 58 282 138 Z" fill="#fdcb6e"/>
+      <rect x="98" y="128" width="204" height="16" rx="8" fill="#e1a12c"/>
+      <rect x="192" y="60" width="16" height="72" rx="6" fill="#e1a12c"/>
       <g id="qmarks" font-size="40" font-weight="800" fill="#2d3436">
         <text x="290" y="90">?</text><text x="80" y="100">?</text><text x="300" y="40">?</text>
       </g>`,
@@ -267,7 +305,6 @@ const PROPS = {
       </g>`,
     hands: [[126, 392], [274, 392]],
     shirt: "#dfe6e9",
-    hideBun: true,
   },
   wood: {
     extra: `
@@ -294,7 +331,7 @@ const PROPS = {
   },
   pet: {
     extra: `
-      <g stroke="#4a2c1d" stroke-width="9" stroke-linecap="round" fill="none" id="messy">
+      <g stroke="#6b4a30" stroke-width="9" stroke-linecap="round" fill="none" id="messy">
         <path d="M150 112 L120 70"/><path d="M175 100 L165 48"/><path d="M205 98 L215 40"/>
         <path d="M235 104 L265 58"/><path d="M262 125 L305 100"/><path d="M135 132 L92 112"/>
         <path d="M200 60 Q230 30 250 50"/>
@@ -326,15 +363,17 @@ const PROPS = {
       <rect x="236" y="404" width="78" height="62" rx="12" fill="#d63031"/>
       <rect x="250" y="400" width="50" height="10" rx="5" fill="#b33939"/>
       <g id="boy">
-        <rect x="64" y="392" width="16" height="44" rx="8" fill="#0984e3"/><rect x="94" y="392" width="16" height="44" rx="8" fill="#0984e3"/>
-        <ellipse cx="88" cy="380" rx="36" ry="40" fill="#74b9ff"/>
-        <text x="72" y="392" font-size="22">🦖</text>
-        <line id="boy-arm" x1="105" y1="360" x2="150" y2="310" stroke="#74b9ff" stroke-width="12" stroke-linecap="round"/>
-        <circle id="boy-hand" cx="150" cy="310" r="8" fill="#f6c9a8"/>
-        <circle cx="88" cy="318" r="30" fill="#f6c9a8"/>
-        <path d="M60 310 Q66 284 88 286 Q112 284 116 310 Q100 298 88 300 Q74 298 60 310 Z" fill="#4a2c1d"/>
-        <path d="M84 287 Q92 272 100 282" stroke="#4a2c1d" stroke-width="5" fill="none"/>
-        <circle cx="78" cy="320" r="4" fill="#2d3436"/><circle cx="98" cy="320" r="4" fill="#2d3436"/>
+        <rect x="64" y="400" width="17" height="40" rx="8" fill="#f6cdb2"/><rect x="94" y="400" width="17" height="40" rx="8" fill="#f6cdb2"/>
+        <path d="M56 392 L120 392 L116 420 L60 420 Z" fill="#f0896b"/>
+        <ellipse cx="88" cy="370" rx="34" ry="34" fill="#fbf8f1" stroke="#e6e0d2" stroke-width="2"/>
+        <path d="M76 340 L88 356 L100 340" stroke="#e6e0d2" stroke-width="3" fill="none"/>
+        <circle cx="88" cy="366" r="2.5" fill="#d8cfbd"/><circle cx="88" cy="380" r="2.5" fill="#d8cfbd"/>
+        <line id="boy-arm" x1="105" y1="360" x2="150" y2="310" stroke="#fbf8f1" stroke-width="12" stroke-linecap="round"/>
+        <circle id="boy-hand" cx="150" cy="310" r="8" fill="#f6cdb2"/>
+        <circle cx="88" cy="318" r="30" fill="#f6cdb2"/>
+        <path d="M58 314 Q58 284 88 284 Q118 284 118 314 Q110 300 96 302 Q84 292 66 304 Q60 308 58 314 Z" fill="#8a6142"/>
+        <circle cx="78" cy="320" r="4.6" fill="#7d9ea3"/><circle cx="98" cy="320" r="4.6" fill="#7d9ea3"/>
+        <circle cx="78" cy="320" r="2.4" fill="#2d3436"/><circle cx="98" cy="320" r="2.4" fill="#2d3436"/>
         <ellipse id="boy-mouth" cx="88" cy="336" rx="6" ry="5" fill="#8b3a2e"/>
       </g>
       <g transform="translate(150,530)"><rect width="56" height="34" rx="8" fill="#00b894"/><rect x="18" y="-9" width="20" height="11" rx="4" fill="#00b894"/></g>`,
@@ -342,7 +381,7 @@ const PROPS = {
     shirt: "#e17055",
   },
   print: { extra: ``, front: ``, hands: [[108, 378], [345, 300]], shirt: "#00b894" },
-  intro: { extra: ``, front: ``, hands: [[108, 378], [330, 200]], shirt: "#e84393" },
+  intro: { extra: ``, front: ``, hands: [[108, 378], [330, 200]], shirt: "#e8455c" },
 };
 
 const anneProps = {
@@ -416,7 +455,6 @@ function enterScene(s) {
     $("b-torso").setAttribute("fill", p.shirt);
     $("b-al").setAttribute("stroke", p.shirt);
     $("b-ar").setAttribute("stroke", p.shirt);
-    $("b-bun").style.display = p.hideBun ? "none" : "";
     setHands("b", p.hands[0], p.hands[1]);
   }
   $("char").dataset.x = { eng: 70, wood: 70, pet: 20, mom: 40, print: 0, intro: 0 }[s.id] ?? 70;
@@ -606,7 +644,7 @@ function renderPet(lt) {
   let tufts = "";
   for (let i = 0; i < 6; i++) {
     const p = (lt * 0.8 + rnd(i)) % 1;
-    tufts += `<circle cx="${180 + p * 160 * (rnd(i + 4) - 0.5) * 2}" cy="${60 - p * 90}" r="${5 + rnd(i) * 4}" fill="#4a2c1d" opacity="${1 - p}"/>`;
+    tufts += `<circle cx="${180 + p * 160 * (rnd(i + 4) - 0.5) * 2}" cy="${60 - p * 90}" r="${5 + rnd(i) * 4}" fill="#6b4a30" opacity="${1 - p}"/>`;
   }
   $("tufts").innerHTML = tufts;
 }
@@ -615,7 +653,7 @@ function renderMom(lt) {
   document.querySelectorAll("#orbit text").forEach((el, i) => {
     const a = lt * 2.8 + i * (Math.PI * 2 / 5);
     el.setAttribute("x", 200 + Math.cos(a) * 165 - 17);
-    el.setAttribute("y", 95 + Math.sin(a) * 55 + 12);
+    el.setAttribute("y", 70 + Math.sin(a) * 50 + 12);
   });
   // Oğlum (2) kucakta kıpır kıpır, annesinin saçını çekiyor
   const wig = Math.sin(lt * 10);
@@ -624,17 +662,16 @@ function renderMom(lt) {
   const bh = [122 + pull * 8, 262 - pull * 40];
   $("boy-arm").setAttribute("x2", bh[0]); $("boy-arm").setAttribute("y2", bh[1]);
   $("boy-hand").setAttribute("cx", bh[0]); $("boy-hand").setAttribute("cy", bh[1]);
-  $("b-bun").setAttribute("transform", `translate(${-pull * 10},${pull * 4})`);
+  $("b-hairback").setAttribute("transform", `translate(${-pull * 8},${pull * 6}) rotate(${-pull * 8} 200 245)`);
   $("boy-mouth").setAttribute("ry", 3 + Math.abs(wig) * 5);
-  headTilt("b", -pull * 8);
+  $("b-head").setAttribute("transform", `rotate(${-pull * 8} 200 245)`);
   // Kızım (4) eteğimden çekiştiriyor, zıplıyor
   const gx = 410, gy = 700 - Math.abs(Math.sin(lt * 8)) * 26;
   $("girl").setAttribute("transform", `translate(${gx},${gy})`);
   const tug = Math.sin(lt * 12) * 8;
   $("girl-arm").setAttribute("x2", -62 + tug); $("girl-arm").setAttribute("y2", 0);
   $("girl-hand").setAttribute("cx", -62 + tug); $("girl-hand").setAttribute("cy", 0);
-  $("girl-pig-l").setAttribute("transform", `rotate(${Math.sin(lt * 16) * 15} -30 -5)`);
-  $("girl-pig-r").setAttribute("transform", `rotate(${-Math.sin(lt * 16) * 15} 30 -5)`);
+  $("girl-hairback").setAttribute("transform", `rotate(${Math.sin(lt * 16) * 6} 0 0)`);
   $("girl-mouth").setAttribute("ry", 3 + Math.abs(Math.sin(lt * 14)) * 6);
   // Annem sakin ama göz seğiriyor
   face("b", { mouth: "smile" });
