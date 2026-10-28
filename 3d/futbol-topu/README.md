@@ -14,15 +14,15 @@ Alt kısmı düz kesik; destek gerekmeden basılır ve pastada devrilmez. Altta 
 
 | Dosya | Ne zaman |
 |---|---|
-| `top-50mm-iki-renk.3mf`, `top-35mm-iki-renk.3mf` | **Çok renkli yazıcı** (AMS/MMU): siyah ve beyaz parçalar tek nesne olarak gelir, parçalara renk ata |
+| `top-50mm-iki-renk.3mf`, `top-35mm-iki-renk.3mf` | **Çok renkli yazıcı** (U1/AMS/MMU): tek top; beyaz (filament 1) ve siyah (filament 2) parçalar hazır atanmış |
 | `top-XXmm-beyaz.stl` + `top-XXmm-siyah.stl` | Aynısı, ayrı STL olarak (ikisini birlikte "tek nesne, çok parça" diye içe aktar) |
 | `top-XXmm-tek-renk.stl` | **Tek renkli yazıcı**: beyaz bas, beşgenleri siyah akrilik boya/kalemle boya. Oyuklar boyama sınırı olur |
 
 ## Snapmaker U1 ile baskı
 
-1. **Snapmaker Orca**'da `stl/tabla-3-buyuk-2-orta-iki-renk.3mf` dosyasını aç. "Tek nesne, çok parça olarak yüklensin mi?" diye sorarsa **Evet** de.
-2. Kafa 1'e **beyaz**, kafa 2'ye **siyah** PLA tak; Orca'da filamentleri eşleştir.
-3. Sol paneldeki nesne listesinde `beyaz` parçaya 1. filamenti, `siyah` parçaya 2. filamenti ata.
+1. **Snapmaker Orca**'da `stl/tabla-3-buyuk-2-orta-iki-renk.3mf` dosyasını aç. Her top ayrı nesne olarak gelir; tek tek seçip taşıyabilir, silebilir, çoğaltabilirsin.
+2. Her topun içinde `beyaz` ve `siyah` iki parça var; `beyaz` → 1. filament, `siyah` → 2. filament olarak hazır atanmıştır.
+3. Kafa 1'e **beyaz**, kafa 2'ye **siyah** PLA tak; Orca'da filamentleri eşleştir.
 4. Doluluk %5–10, destek kapalı, katman 0,16 mm → Dilimle → Yazdır.
 
 ## Önerilen dilimleyici ayarları
@@ -38,7 +38,7 @@ Alt kısmı düz kesik; destek gerekmeden basılır ve pastada devrilmez. Altta 
 
 `stl/yarim/` klasöründe. Her top iki yarım olarak basılıp yapıştırılır; iki yarım da düz yüzü tablada, **desteksiz** basılır.
 
-- **Snapmaker U1:** `tabla-yarim-3-buyuk-2-orta-iki-renk.3mf` → 10 yarım tek tablada, `beyaz`/`siyah` parçalarına filament ata.
+- **Snapmaker U1:** `tabla-yarim-3-buyuk-2-orta-iki-renk.3mf` → 10 yarım tek tablada, her yarım ayrı nesne; `beyaz`/`siyah` parçalar 1./2. filamente hazır atanmış.
 - **Tek renk:** `yarim-XXmm-ust-tek-renk.stl` + `yarim-XXmm-alt-tek-renk.stl`.
 
 **Birleştirme:**

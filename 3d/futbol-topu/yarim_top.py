@@ -9,6 +9,7 @@ Alt yarımın kutbunda kürdan/çubuk deliği var.
 import numpy as np
 import trimesh
 import manifold3d as mf
+from uc_mf import write_3mf
 from futbol_topu import SIZES, HOLE_D, grooved_sphere, pent_shell, to_trimesh
 
 PIN_HOLE_D, PIN_HOLE_H = 2.1, 3.0  # 1,75 mm filament pim için delik (mm)
@@ -62,18 +63,11 @@ def main():
     yer = [("50mm", "ust", -84, 70), ("50mm", "alt", -28, 70), ("50mm", "ust", 28, 70), ("50mm", "alt", 84, 70),
            ("50mm", "ust", -84, 12), ("50mm", "alt", -28, 12),
            ("35mm", "ust", 22, 12), ("35mm", "alt", 66, 12), ("35mm", "ust", 22, -36), ("35mm", "alt", 66, -36)]
-    whites, blacks = [], []
-    for tag, side, x, y in yer:
+    objs = []
+    for k, (tag, side, x, y) in enumerate(yer, start=1):
         _, w, b = made[tag][side]
-        whites.append(w.copy().apply_translation([x, y, 0]))
-        blacks.append(b.copy().apply_translation([x, y, 0]))
-    sc = trimesh.Scene()
-    W, B = trimesh.util.concatenate(whites), trimesh.util.concatenate(blacks)
-    sc.add_geometry(W, node_name="beyaz", geom_name="beyaz")
-    sc.add_geometry(B, node_name="siyah", geom_name="siyah")
-    sc.export("stl/yarim/tabla-yarim-3-buyuk-2-orta-iki-renk.3mf")
-    allb = trimesh.util.concatenate([W, B]).bounds
-    print("tabla boyutu:", np.round(allb[1] - allb[0], 1))
+        objs.append((f"yarim-{tag}-{side}-{k}", [("beyaz", w, 1), ("siyah", b, 2)], (x, y)))
+    write_3mf("stl/yarim/tabla-yarim-3-buyuk-2-orta-iki-renk.3mf", objs)
 
 
 if __name__ == "__main__":

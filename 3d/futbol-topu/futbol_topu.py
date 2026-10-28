@@ -9,6 +9,7 @@ Alt kısmı düz kesik (destek gerekmez, pastada devrilmez), altta çubuk deliğ
 import numpy as np
 import trimesh
 import manifold3d as mf
+from uc_mf import write_3mf
 
 SIZES = {"buyuk": 50.0, "orta": 35.0}  # çap (mm)
 GROOVE_W = 1.0      # dikiş oyuğu genişliği (mm)
@@ -113,17 +114,15 @@ def ball(diam):
 
 
 def tabla():
-    """Snapmaker U1 gibi çok renkli yazıcılar için: 3 büyük + 2 orta, tek tabla, 2 parça (beyaz/siyah)."""
-    import glob
+    """Snapmaker U1 gibi çok renkli yazıcılar için: 3 büyük + 2 orta, tek tabla.
+    Her top ayrı nesne; içinde beyaz (filament 1) ve siyah (filament 2) parçalar."""
     yer = [("50mm", -58, 32), ("50mm", 0, 32), ("50mm", 58, 32), ("35mm", -30, -30), ("35mm", 30, -30)]
-    whites, blacks = [], []
-    for tag, x, y in yer:
-        whites.append(trimesh.load(f"stl/top-{tag}-beyaz.stl").apply_translation([x, y, 0]))
-        blacks.append(trimesh.load(f"stl/top-{tag}-siyah.stl").apply_translation([x, y, 0]))
-    sc = trimesh.Scene()
-    sc.add_geometry(trimesh.util.concatenate(whites), node_name="beyaz", geom_name="beyaz")
-    sc.add_geometry(trimesh.util.concatenate(blacks), node_name="siyah", geom_name="siyah")
-    sc.export("stl/tabla-3-buyuk-2-orta-iki-renk.3mf")
+    objs = []
+    for k, (tag, x, y) in enumerate(yer, start=1):
+        w = trimesh.load(f"stl/top-{tag}-beyaz.stl")
+        b = trimesh.load(f"stl/top-{tag}-siyah.stl")
+        objs.append((f"top-{tag}-{k}", [("beyaz", w, 1), ("siyah", b, 2)], (x, y)))
+    write_3mf("stl/tabla-3-buyuk-2-orta-iki-renk.3mf", objs)
 
 
 if __name__ == "__main__":
@@ -135,10 +134,7 @@ if __name__ == "__main__":
         one.export(f"stl/top-{tag}-tek-renk.stl")
         white.export(f"stl/top-{tag}-beyaz.stl")
         black.export(f"stl/top-{tag}-siyah.stl")
-        sc = trimesh.Scene()
-        sc.add_geometry(white, node_name="beyaz", geom_name="beyaz")
-        sc.add_geometry(black, node_name="siyah", geom_name="siyah")
-        sc.export(f"stl/top-{tag}-iki-renk.3mf")
+        write_3mf(f"stl/top-{tag}-iki-renk.3mf", [(f"top-{tag}", [("beyaz", white, 1), ("siyah", black, 2)], (0, 0))])
         print(tag, "watertight:", one.is_watertight, white.is_watertight, black.is_watertight,
               "boyut:", np.round(one.extents, 1))
     tabla()
