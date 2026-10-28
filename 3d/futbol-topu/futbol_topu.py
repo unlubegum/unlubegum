@@ -105,6 +105,20 @@ def ball(diam):
     return [to_trimesh(x.translate(lift)) for x in (body, white, black)]
 
 
+def tabla():
+    """Snapmaker U1 gibi çok renkli yazıcılar için: 3 büyük + 2 orta, tek tabla, 2 parça (beyaz/siyah)."""
+    import glob
+    yer = [("50mm", -58, 32), ("50mm", 0, 32), ("50mm", 58, 32), ("35mm", -30, -30), ("35mm", 30, -30)]
+    whites, blacks = [], []
+    for tag, x, y in yer:
+        whites.append(trimesh.load(f"stl/top-{tag}-beyaz.stl").apply_translation([x, y, 0]))
+        blacks.append(trimesh.load(f"stl/top-{tag}-siyah.stl").apply_translation([x, y, 0]))
+    sc = trimesh.Scene()
+    sc.add_geometry(trimesh.util.concatenate(whites), node_name="beyaz", geom_name="beyaz")
+    sc.add_geometry(trimesh.util.concatenate(blacks), node_name="siyah", geom_name="siyah")
+    sc.export("stl/tabla-3-buyuk-2-orta-iki-renk.3mf")
+
+
 if __name__ == "__main__":
     import os
     os.makedirs("stl", exist_ok=True)
@@ -120,3 +134,4 @@ if __name__ == "__main__":
         sc.export(f"stl/top-{tag}-iki-renk.3mf")
         print(tag, "watertight:", one.is_watertight, white.is_watertight, black.is_watertight,
               "boyut:", np.round(one.extents, 1))
+    tabla()

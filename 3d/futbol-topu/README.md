@@ -18,6 +18,13 @@ Alt kısmı düz kesik; destek gerekmeden basılır ve pastada devrilmez. Altta 
 | `top-XXmm-beyaz.stl` + `top-XXmm-siyah.stl` | Aynısı, ayrı STL olarak (ikisini birlikte "tek nesne, çok parça" diye içe aktar) |
 | `top-XXmm-tek-renk.stl` | **Tek renkli yazıcı**: beyaz bas, beşgenleri siyah akrilik boya/kalemle boya. Oyuklar boyama sınırı olur |
 
+## Snapmaker U1 ile baskı
+
+1. **Snapmaker Orca**'da `stl/tabla-3-buyuk-2-orta-iki-renk.3mf` dosyasını aç. "Tek nesne, çok parça olarak yüklensin mi?" diye sorarsa **Evet** de.
+2. Kafa 1'e **beyaz**, kafa 2'ye **siyah** PLA tak; Orca'da filamentleri eşleştir.
+3. Sol paneldeki nesne listesinde `beyaz` parçaya 1. filamenti, `siyah` parçaya 2. filamenti ata.
+4. Doluluk %5–10, destek kapalı, katman 0,16 mm → Dilimle → Yazdır.
+
 ## Önerilen dilimleyici ayarları
 
 - Katman: 0,16 mm (yuvarlaklık için), duvar: 3
