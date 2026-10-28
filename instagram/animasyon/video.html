@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Kimine Göre Ben</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #111; }
+  #stage {
+    position: relative; width: 540px; height: 960px; overflow: hidden;
+    font-family: "DejaVu Sans", sans-serif; background: #74b9ff;
+  }
+  svg { position: absolute; inset: 0; }
+  .txt { position: absolute; left: 24px; right: 24px; text-align: center; }
+  #title {
+    top: 70px; font-size: 38px; font-weight: 800; color: #fff; line-height: 1.15;
+    text-shadow: 0 4px 0 rgba(0,0,0,.25);
+  }
+  #title .pill {
+    display: inline-block; background: #2d3436; padding: 14px 22px; border-radius: 22px;
+    box-shadow: 0 8px 0 rgba(0,0,0,.18);
+  }
+  #title .small { display: block; font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+  #sub { top: 230px; font-size: 22px; font-weight: 700; color: #2d3436; }
+  #sub span {
+    display: inline-block; background: #fff; padding: 10px 16px; border-radius: 16px;
+    box-shadow: 0 5px 0 rgba(0,0,0,.12);
+  }
+  #bubble {
+    position: absolute; left: 40px; right: 40px; top: 210px; background: #fff; border-radius: 26px;
+    padding: 22px; font-size: 30px; font-weight: 800; color: #2d3436; text-align: center;
+    box-shadow: 0 8px 0 rgba(0,0,0,.15);
+  }
+  #bubble::after {
+    content: ""; position: absolute; left: 260px; bottom: -34px; border: 18px solid transparent;
+    border-top: 22px solid #fff;
+  }
+  #final {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 26px; background: linear-gradient(160deg, #fd79a8, #6c5ce7);
+    color: #fff; text-align: center; padding: 0 30px;
+  }
+  #final .big { font-size: 44px; font-weight: 800; line-height: 1.2; text-shadow: 0 5px 0 rgba(0,0,0,.2); }
+  #final .mid { font-size: 27px; font-weight: 700; line-height: 1.3; }
+  #final .cta {
+    font-size: 26px; font-weight: 800; background: #fff; color: #6c5ce7; padding: 16px 28px;
+    border-radius: 40px; box-shadow: 0 6px 0 rgba(0,0,0,.2);
+  }
+  #confetti { position: absolute; inset: 0; pointer-events: none; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <svg id="svg" viewBox="0 0 540 960" width="540" height="960"></svg>
+  <div id="title" class="txt"></div>
+  <div id="sub" class="txt"></div>
+  <div id="bubble"></div>
+  <div id="final">
+    <div class="big">Soyadım Ünlü,<br>ben henüz değilim 😄</div>
+    <div class="mid">Bu sefer bırakmıyorum.<br>3D yazıcı serüvenim başlıyor 🖨️</div>
+    <div class="cta">Takip et, birlikte görelim! 💜</div>
+  </div>
+  <svg id="confetti" viewBox="0 0 540 960" width="540" height="960"></svg>
+  <div id="flash"></div>
+</div>
+
+<script>
+// ---------- Zaman çizelgesi (saniye) ----------
+const SCENES = [
+  { id: "eng",   start: 0,    end: 4.5,  bg: "#74b9ff" },
+  { id: "wood",  start: 4.5,  end: 9,    bg: "#ffeaa7" },
+  { id: "pet",   start: 9,    end: 13.5, bg: "#a8e6cf" },
+  { id: "mom",   start: 13.5, end: 18,   bg: "#fab1a0" },
+  { id: "print", start: 18,   end: 24,   bg: "#81ecec" },
+  { id: "anne",  start: 24,   end: 31,   bg: "#f5e6ca" },
+  { id: "intro", start: 31,   end: 42,   bg: "#ffd1e8" },
+];
+const DURATION = 42;
+const BEAT = 60 / 124; // müzikle aynı tempo
+
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const ease = x => 1 - Math.pow(1 - clamp(x), 3);
+const pop = x => { x = clamp(x); return 1 + Math.sin(x * Math.PI) * 0.12 * (1 - x) - 0.15 * (1 - ease(x)); };
+const bounce = t => Math.abs(Math.sin(t * Math.PI / BEAT)); // her vuruşta bir zıplama
+const $ = id => document.getElementById(id);
+
+// ---------- Karakter çizimi ----------
+function person(id, o) {
+  return `
+  <g id="${id}">
+    <path id="${id}-hairback" d="M118 170 Q105 285 150 295 L250 295 Q295 285 282 170 Z" fill="${o.hair}"/>
+    <rect x="150" y="420" width="40" height="140" rx="12" fill="${o.pants}"/>
+    <rect x="210" y="420" width="40" height="140" rx="12" fill="${o.pants}"/>
+    <ellipse cx="166" cy="565" rx="30" ry="13" fill="#2d3436"/>
+    <ellipse cx="234" cy="565" rx="30" ry="13" fill="#2d3436"/>
+    <path id="${id}-torso" d="M135 250 Q200 236 265 250 L285 440 Q200 456 115 440 Z" fill="${o.shirt}"/>
+    <rect x="185" y="225" width="30" height="32" fill="${o.skin}"/>
+    <g id="${id}-head">
+      <circle id="${id}-bun" cx="200" cy="90" r="34" fill="${o.hair}"/>
+      <circle cx="200" cy="175" r="70" fill="${o.skin}"/>
+      <path d="M130 162 Q148 96 200 100 Q255 96 272 166 Q240 126 200 132 Q164 128 130 162 Z" fill="${o.hair}"/>
+      <g id="${id}-eyes">
+        <circle cx="175" cy="182" r="7.5" fill="#2d3436"/><circle cx="225" cy="182" r="7.5" fill="#2d3436"/>
+        <circle cx="177.5" cy="179.5" r="2.4" fill="#fff"/><circle cx="227.5" cy="179.5" r="2.4" fill="#fff"/>
+      </g>
+      <g id="${id}-eyesX" stroke="#2d3436" stroke-width="5" stroke-linecap="round" style="display:none">
+        <path d="M167 174 L183 190 M183 174 L167 190"/><path d="M217 174 L233 190 M233 174 L217 190"/>
+      </g>
+      <circle cx="158" cy="206" r="11" fill="#ff7675" opacity=".45"/>
+      <circle cx="242" cy="206" r="11" fill="#ff7675" opacity=".45"/>
+      <path id="${id}-mouth" d="M183 210 Q200 228 217 210" stroke="#8b3a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <ellipse id="${id}-mouthO" cx="200" cy="216" rx="11" ry="10" fill="#8b3a2e" style="display:none"/>
+      <g id="${id}-extra"></g>
+    </g>
+    <line id="${id}-al" x1="145" y1="265" x2="105" y2="360" stroke="${o.shirt}" stroke-width="26" stroke-linecap="round"/>
+    <line id="${id}-ar" x1="255" y1="265" x2="295" y2="360" stroke="${o.shirt}" stroke-width="26" stroke-linecap="round"/>
+    <circle id="${id}-hl" cx="105" cy="360" r="15" fill="${o.skin}"/>
+    <circle id="${id}-hr" cx="295" cy="360" r="15" fill="${o.skin}"/>
+    <g id="${id}-front"></g>
+  </g>`;
+}
+
+$("svg").innerHTML = `
+  <defs>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="4" cy="4" r="3" fill="#fff" opacity=".18"/>
+    </pattern>
+  </defs>
+  <rect id="bg" width="540" height="960" fill="#74b9ff"/>
+  <rect id="dotsbg" width="540" height="960" fill="url(#dots)"/>
+  <rect x="0" y="870" width="540" height="90" fill="#000" opacity=".08"/>
+
+  <!-- Oturma odası (anne sahnesi) -->
+  <g id="room" style="display:none">
+    <rect width="540" height="960" fill="#f5e6ca"/>
+    <rect y="860" width="540" height="100" fill="#c8a27a"/>
+    <rect x="60" y="330" width="150" height="190" rx="6" fill="#bfe3ff" stroke="#fff" stroke-width="10"/>
+    <line x1="135" y1="330" x2="135" y2="520" stroke="#fff" stroke-width="8"/>
+    <path d="M45 320 Q75 430 60 535 L40 535 L40 320 Z" fill="#e17055"/>
+    <path d="M225 320 Q195 430 210 535 L230 535 L230 320 Z" fill="#e17055"/>
+    <rect x="360" y="350" width="110" height="80" rx="4" fill="#fff" stroke="#b08968" stroke-width="8"/>
+    <text x="415" y="403" font-size="34" text-anchor="middle">🧿</text>
+    <rect x="30" y="640" width="480" height="200" rx="40" fill="#8e5a4b"/>
+    <rect x="30" y="600" width="480" height="120" rx="40" fill="#a0675a"/>
+    <rect x="70" y="830" width="20" height="40" fill="#5d4037"/><rect x="450" y="830" width="20" height="40" fill="#5d4037"/>
+  </g>
+
+  <!-- Köpek (pet sahnesi) -->
+  <g id="dog" style="display:none" transform="translate(360,690)">
+    <ellipse cx="70" cy="150" rx="70" ry="14" fill="#000" opacity=".12"/>
+    <g id="dogbody">
+      <rect x="20" y="95" width="18" height="55" rx="9" fill="#fff"/><rect x="100" y="95" width="18" height="55" rx="9" fill="#fff"/>
+      <circle cx="30" cy="148" r="16" fill="#fff"/><circle cx="110" cy="148" r="16" fill="#fff"/>
+      <ellipse cx="70" cy="90" rx="62" ry="42" fill="#fff"/>
+      <circle cx="20" cy="75" r="26" fill="#fff"/><circle cx="120" cy="75" r="26" fill="#fff"/>
+      <circle id="dogtail" cx="140" cy="60" r="18" fill="#fff"/>
+      <circle cx="20" cy="20" r="44" fill="#fff"/>
+      <circle cx="-8" cy="-8" r="22" fill="#fff"/><circle cx="20" cy="-22" r="24" fill="#fff"/><circle cx="48" cy="-8" r="22" fill="#fff"/>
+      <ellipse cx="-22" cy="30" rx="16" ry="28" fill="#f8f0ff"/><ellipse cx="62" cy="30" rx="16" ry="28" fill="#f8f0ff"/>
+      <circle cx="6" cy="18" r="5" fill="#2d3436"/><circle cx="34" cy="18" r="5" fill="#2d3436"/>
+      <ellipse cx="20" cy="36" rx="8" ry="6" fill="#2d3436"/>
+      <path d="M10 46 Q20 54 30 46" stroke="#2d3436" stroke-width="3" fill="none"/>
+      <path d="M8 -40 L20 -30 L32 -40 L32 -20 L20 -30 L8 -20 Z" fill="#fd79a8"/>
+    </g>
+    <g id="sparkles">
+      <text x="-40" y="-40" font-size="30">✨</text><text x="90" y="10" font-size="26">✨</text><text x="140" y="110" font-size="22">✨</text>
+    </g>
+    <g id="drops"></g>
+  </g>
+
+  <!-- 3D yazıcı -->
+  <g id="printer" style="display:none" transform="translate(300,560)">
+    <ellipse cx="105" cy="305" rx="115" ry="14" fill="#000" opacity=".12"/>
+    <g id="spool"><circle cx="105" cy="-18" r="34" fill="#e17055"/><circle cx="105" cy="-18" r="12" fill="#fff"/>
+      <rect x="101" y="-50" width="8" height="20" fill="#fff" opacity=".6"/></g>
+    <rect x="0" y="0" width="210" height="300" rx="10" fill="#dfe6e9" stroke="#2d3436" stroke-width="8"/>
+    <rect x="18" y="18" width="174" height="230" fill="#636e72" opacity=".18"/>
+    <rect x="10" y="250" width="190" height="42" fill="#2d3436"/>
+    <rect x="22" y="236" width="166" height="14" fill="#b2bec3"/>
+    <circle id="pled" cx="40" cy="271" r="7" fill="#00b894"/><rect x="120" y="262" width="62" height="18" rx="4" fill="#0984e3"/>
+    <g id="pobj"></g>
+    <g id="pspag" style="display:none">
+      <path d="M35 236 C60 170 120 250 90 190 S170 160 140 215 S50 150 80 120 S160 120 150 180" stroke="#e17055" stroke-width="4" fill="none"/>
+      <path d="M45 236 C30 180 110 200 120 150 S30 150 60 200 S170 230 170 140" stroke="#e17055" stroke-width="4" fill="none"/>
+      <path d="M60 236 C100 120 20 140 100 100 S190 190 120 236" stroke="#fdcb6e" stroke-width="4" fill="none"/>
+      <path d="M150 236 C140 160 60 110 70 160 S130 220 160 130" stroke="#e17055" stroke-width="4" fill="none"/>
+      <path id="pstring" d="M105 60 C100 90 120 100 105 140" stroke="#e17055" stroke-width="4" fill="none"/>
+    </g>
+    <rect id="pgantry" x="10" y="50" width="190" height="10" fill="#2d3436"/>
+    <g id="pnozzle"><rect x="-18" y="-22" width="36" height="34" rx="5" fill="#fdcb6e" stroke="#2d3436" stroke-width="4"/>
+      <path d="M-6 12 L6 12 L0 22 Z" fill="#2d3436"/></g>
+  </g>
+
+  <!-- Kızım (4 yaş) — anne sahnesi -->
+  <g id="girl" style="display:none">
+    <ellipse cx="0" cy="168" rx="40" ry="9" fill="#000" opacity=".12"/>
+    <rect x="-20" y="105" width="14" height="60" rx="7" fill="#f6c9a8"/><rect x="6" y="105" width="14" height="60" rx="7" fill="#f6c9a8"/>
+    <ellipse cx="-13" cy="166" rx="14" ry="7" fill="#e84393"/><ellipse cx="13" cy="166" rx="14" ry="7" fill="#e84393"/>
+    <path d="M-22 40 L22 40 L42 115 L-42 115 Z" fill="#fd79a8"/>
+    <circle cx="-8" cy="80" r="5" fill="#fff"/><circle cx="12" cy="95" r="5" fill="#fff"/><circle cx="-20" cy="105" r="5" fill="#fff"/>
+    <line id="girl-arm" x1="-15" y1="50" x2="-50" y2="20" stroke="#fd79a8" stroke-width="13" stroke-linecap="round"/>
+    <circle id="girl-hand" cx="-50" cy="20" r="8" fill="#f6c9a8"/>
+    <line x1="15" y1="50" x2="35" y2="85" stroke="#fd79a8" stroke-width="13" stroke-linecap="round"/>
+    <circle cx="35" cy="85" r="8" fill="#f6c9a8"/>
+    <g id="girl-pig-l"><circle cx="-42" cy="-12" r="15" fill="#4a2c1d"/><circle cx="-34" cy="-22" r="6" fill="#fdcb6e"/></g>
+    <g id="girl-pig-r"><circle cx="42" cy="-12" r="15" fill="#4a2c1d"/><circle cx="34" cy="-22" r="6" fill="#fdcb6e"/></g>
+    <circle cx="0" cy="0" r="38" fill="#f6c9a8"/>
+    <path d="M-38 -4 Q-30 -44 0 -42 Q30 -44 38 -4 Q20 -24 0 -22 Q-20 -24 -38 -4 Z" fill="#4a2c1d"/>
+    <circle cx="-13" cy="4" r="5" fill="#2d3436"/><circle cx="13" cy="4" r="5" fill="#2d3436"/>
+    <circle cx="-22" cy="16" r="6" fill="#ff7675" opacity=".5"/><circle cx="22" cy="16" r="6" fill="#ff7675" opacity=".5"/>
+    <ellipse id="girl-mouth" cx="0" cy="20" rx="7" ry="6" fill="#8b3a2e"/>
+  </g>
+
+  <g id="char" transform="translate(70,300)">
+    ${person("b", { skin: "#f6c9a8", hair: "#4a2c1d", shirt: "#ffffff", pants: "#34495e" })}
+  </g>
+  <g id="annep" style="display:none" transform="translate(70,300)">
+    ${person("a", { skin: "#f1c27d", hair: "#b2bec3", shirt: "#6c5ce7", pants: "#5d4037" })}
+  </g>
+
+  <!-- Kapıdan bakan Begüm (anne sahnesi) -->
+  <g id="peek" style="display:none">
+    <circle cx="0" cy="-80" r="26" fill="#4a2c1d"/>
+    <circle cx="0" cy="0" r="62" fill="#f6c9a8"/>
+    <path d="M-62 -8 Q-46 -66 0 -62 Q48 -66 62 -4 Q34 -40 0 -36 Q-32 -40 -62 -8 Z" fill="#4a2c1d"/>
+    <g id="peek-happy">
+      <text x="-30" y="12" font-size="22" text-anchor="middle">✨</text><text x="30" y="12" font-size="22" text-anchor="middle">✨</text>
+      <path d="M-16 26 Q0 42 16 26" stroke="#8b3a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
+    </g>
+    <g id="peek-sad" style="display:none">
+      <path d="M-38 4 L-20 8 M38 4 L20 8" stroke="#2d3436" stroke-width="5" stroke-linecap="round"/>
+      <path d="M-16 36 Q0 22 16 36" stroke="#8b3a2e" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <path d="M-28 14 Q-31 24 -28 28 Q-25 24 -28 14 Z" fill="#74b9ff"/>
+    </g>
+    <circle cx="-14" cy="62" r="13" fill="#f6c9a8"/><circle cx="14" cy="62" r="13" fill="#f6c9a8"/>
+  </g>
+  <g id="fx"></g>
+`;
+
+// ---------- Sahne aksesuarları (karakter koordinatlarında) ----------
+const PROPS = {
+  eng: {
+    extra: `
+      <g id="sweat"><path d="M282 140 Q290 155 282 162 Q274 155 282 140 Z" fill="#74b9ff" stroke="#0984e3" stroke-width="2"/></g>
+      <circle cx="175" cy="182" r="19" fill="rgba(255,255,255,.25)" stroke="#2d3436" stroke-width="4.5"/>
+      <circle cx="225" cy="182" r="19" fill="rgba(255,255,255,.25)" stroke="#2d3436" stroke-width="4.5"/>
+      <line x1="194" y1="182" x2="206" y2="182" stroke="#2d3436" stroke-width="4.5"/>
+      <path d="M125 138 Q128 66 200 64 Q272 66 275 138 Z" fill="#fdcb6e"/>
+      <rect x="108" y="128" width="184" height="16" rx="8" fill="#e1a12c"/>
+      <rect x="192" y="68" width="16" height="64" rx="6" fill="#e1a12c"/>
+      <g id="qmarks" font-size="40" font-weight="800" fill="#2d3436">
+        <text x="290" y="90">?</text><text x="80" y="100">?</text><text x="300" y="40">?</text>
+      </g>`,
+    front: `
+      <g id="laptop">
+        <rect x="128" y="288" width="144" height="96" rx="7" fill="#2d3436"/>
+        <rect id="screen" x="136" y="296" width="128" height="80" rx="3" fill="#1e272e"/>
+        <g id="code">
+          <rect x="144" y="304" height="7" rx="3" fill="#55efc4" data-w="70"/>
+          <rect x="154" y="318" height="7" rx="3" fill="#74b9ff" data-w="90"/>
+          <rect x="154" y="332" height="7" rx="3" fill="#fd79a8" data-w="60"/>
+          <rect x="144" y="346" height="7" rx="3" fill="#ffeaa7" data-w="100"/>
+          <rect x="144" y="360" height="7" rx="3" fill="#55efc4" data-w="40"/>
+        </g>
+        <text id="scrtxt" x="200" y="346" font-size="20" font-weight="800" text-anchor="middle" fill="#fff"></text>
+        <path d="M112 398 L288 398 L276 382 L124 382 Z" fill="#b2bec3"/>
+      </g>`,
+    hands: [[126, 392], [274, 392]],
+    shirt: "#dfe6e9",
+    hideBun: true,
+  },
+  wood: {
+    extra: `
+      <g transform="rotate(-35 270 145)"><rect x="252" y="140" width="56" height="10" rx="3" fill="#fdcb6e"/>
+      <path d="M308 140 L322 145 L308 150 Z" fill="#2d3436"/><rect x="246" y="140" width="8" height="10" fill="#ff7675"/></g>`,
+    front: `
+      <path d="M152 268 L248 268 L266 442 L134 442 Z" fill="#a1887f"/>
+      <rect x="170" y="340" width="60" height="40" rx="6" fill="#8d6e63"/>
+      <g id="plank" transform="rotate(-8 200 380)">
+        <rect x="40" y="368" width="320" height="28" rx="4" fill="#e0b07a" stroke="#a0753f" stroke-width="3"/>
+        <path d="M60 378 Q140 372 200 380 T340 376" stroke="#a0753f" stroke-width="2" fill="none"/>
+        <path d="M70 388 Q160 384 230 390 T340 387" stroke="#a0753f" stroke-width="2" fill="none"/>
+        <rect x="146" y="352" width="5" height="18" fill="#636e72"/><rect x="141" y="350" width="15" height="4" fill="#636e72"/>
+      </g>
+      <g id="hammer"><rect x="-5" y="-70" width="10" height="80" rx="4" fill="#a0753f"/>
+        <rect x="-26" y="-92" width="52" height="24" rx="5" fill="#636e72"/></g>
+      <g id="dust"></g>
+      <g id="ouch" style="display:none">
+        <text x="40" y="360" font-size="64">💥</text>
+        <text x="20" y="300" font-size="40" font-weight="800" fill="#d63031" stroke="#fff" stroke-width="3" paint-order="stroke">AAH!</text>
+      </g>`,
+    hands: [[96, 392], [300, 250]],
+    shirt: "#d63031",
+  },
+  pet: {
+    extra: `
+      <g stroke="#4a2c1d" stroke-width="9" stroke-linecap="round" fill="none" id="messy">
+        <path d="M150 112 L120 70"/><path d="M175 100 L165 48"/><path d="M205 98 L215 40"/>
+        <path d="M235 104 L265 58"/><path d="M262 125 L305 100"/><path d="M135 132 L92 112"/>
+        <path d="M200 60 Q230 30 250 50"/>
+      </g>`,
+    front: `
+      <g transform="translate(108,388) rotate(20)"><rect x="-6" y="-48" width="12" height="60" rx="3" fill="#0984e3"/>
+        <g fill="#0984e3">${Array.from({length: 8}, (_, i) => `<rect x="6" y="${-46 + i * 7}" width="16" height="3"/>`).join("")}</g></g>
+      <g id="dryer" transform="translate(330,288)">
+        <rect x="-8" y="0" width="22" height="58" rx="8" fill="#e84393"/>
+        <ellipse cx="0" cy="-8" rx="38" ry="28" fill="#fd79a8"/>
+        <rect x="30" y="-22" width="44" height="28" rx="6" fill="#e84393"/>
+        <g id="air" stroke="#fff" stroke-width="5" stroke-linecap="round">
+          <line x1="86" y1="-18" x2="120" y2="-22"/><line x1="86" y1="-6" x2="126" y2="-4"/><line x1="86" y1="6" x2="118" y2="14"/>
+        </g>
+      </g>
+      <g id="tufts"></g>`,
+    hands: [[108, 392], [326, 296]],
+    shirt: "#a29bfe",
+  },
+  mom: {
+    extra: `
+      <path d="M163 196 Q175 202 187 196" stroke="#b07a6a" stroke-width="3" fill="none"/>
+      <path d="M213 196 Q225 202 237 196" stroke="#b07a6a" stroke-width="3" fill="none"/>
+      <g id="orbit" font-size="34">
+        <text>🍼</text><text>📧</text><text>🧺</text><text>🧾</text><text>📞</text>
+      </g>`,
+    front: `
+      <line x1="150" y1="256" x2="262" y2="420" stroke="#c0392b" stroke-width="10" stroke-linecap="round"/>
+      <rect x="236" y="404" width="78" height="62" rx="12" fill="#d63031"/>
+      <rect x="250" y="400" width="50" height="10" rx="5" fill="#b33939"/>
+      <g id="boy">
+        <rect x="64" y="392" width="16" height="44" rx="8" fill="#0984e3"/><rect x="94" y="392" width="16" height="44" rx="8" fill="#0984e3"/>
+        <ellipse cx="88" cy="380" rx="36" ry="40" fill="#74b9ff"/>
+        <text x="72" y="392" font-size="22">🦖</text>
+        <line id="boy-arm" x1="105" y1="360" x2="150" y2="310" stroke="#74b9ff" stroke-width="12" stroke-linecap="round"/>
+        <circle id="boy-hand" cx="150" cy="310" r="8" fill="#f6c9a8"/>
+        <circle cx="88" cy="318" r="30" fill="#f6c9a8"/>
+        <path d="M60 310 Q66 284 88 286 Q112 284 116 310 Q100 298 88 300 Q74 298 60 310 Z" fill="#4a2c1d"/>
+        <path d="M84 287 Q92 272 100 282" stroke="#4a2c1d" stroke-width="5" fill="none"/>
+        <circle cx="78" cy="320" r="4" fill="#2d3436"/><circle cx="98" cy="320" r="4" fill="#2d3436"/>
+        <ellipse id="boy-mouth" cx="88" cy="336" rx="6" ry="5" fill="#8b3a2e"/>
+      </g>
+      <g transform="translate(150,530)"><rect width="56" height="34" rx="8" fill="#00b894"/><rect x="18" y="-9" width="20" height="11" rx="4" fill="#00b894"/></g>`,
+    hands: [[118, 372], [300, 400]],
+    shirt: "#e17055",
+  },
+  print: { extra: ``, front: ``, hands: [[108, 378], [345, 300]], shirt: "#00b894" },
+  intro: { extra: ``, front: ``, hands: [[108, 378], [330, 200]], shirt: "#e84393" },
+};
+
+const anneProps = {
+  extra: `
+    <rect x="160" y="170" width="32" height="13" fill="#f1c27d"/><rect x="210" y="170" width="32" height="13" fill="#f1c27d"/>
+    <line x1="165" y1="183" x2="186" y2="183" stroke="#2d3436" stroke-width="4" stroke-linecap="round"/><line x1="214" y1="183" x2="235" y2="183" stroke="#2d3436" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="175" cy="184" r="19" fill="none" stroke="#2d3436" stroke-width="4"/>
+    <circle cx="225" cy="184" r="19" fill="none" stroke="#2d3436" stroke-width="4"/>
+    <line x1="194" y1="184" x2="206" y2="184" stroke="#2d3436" stroke-width="4"/>`,
+  front: `
+    <path d="M135 252 L170 252 L160 440 L115 440 Z" fill="#a29bfe"/>
+    <path d="M265 252 L230 252 L240 440 L285 440 Z" fill="#a29bfe"/>
+    <g id="tea" transform="translate(296,318)">
+      <ellipse cx="0" cy="44" rx="30" ry="7" fill="#fff" stroke="#b2bec3" stroke-width="2"/>
+      <path d="M-14 0 Q-6 18 -12 40 L12 40 Q6 18 14 0 Z" fill="#c0392b" opacity=".9" stroke="#fff" stroke-width="2"/>
+      <g id="steam" stroke="#b2bec3" stroke-width="3" fill="none" stroke-linecap="round">
+        <path d="M-6 -8 Q-12 -20 -6 -32"/><path d="M6 -8 Q12 -22 6 -36"/>
+      </g>
+    </g>`,
+};
+
+$("a-extra").innerHTML = anneProps.extra;
+$("a-front").innerHTML = anneProps.front;
+$("a-mouth").setAttribute("d", "M186 216 L214 216");
+setHands("a", [118, 378], [296, 352]);
+
+function setHands(p, l, r) {
+  $(p + "-al").setAttribute("x2", l[0]); $(p + "-al").setAttribute("y2", l[1]);
+  $(p + "-ar").setAttribute("x2", r[0]); $(p + "-ar").setAttribute("y2", r[1]);
+  $(p + "-hl").setAttribute("cx", l[0]); $(p + "-hl").setAttribute("cy", l[1]);
+  $(p + "-hr").setAttribute("cx", r[0]); $(p + "-hr").setAttribute("cy", r[1]);
+}
+function headTilt(p, deg, dy = 0) {
+  const tr = `translate(0,${dy}) rotate(${deg} 200 245)`;
+  $(p + "-head").setAttribute("transform", tr);
+  $(p + "-hairback").setAttribute("transform", tr);
+}
+function face(p, { mouth = "smile", eyes = "open", eyeScale = 1 } = {}) {
+  $(p + "-mouth").style.display = mouth === "O" ? "none" : "";
+  $(p + "-mouthO").style.display = mouth === "O" ? "" : "none";
+  const shapes = {
+    smile: "M183 210 Q200 228 217 210", big: "M180 208 Q200 236 220 208",
+    flat: "M186 216 L214 216", frown: "M185 222 Q200 210 215 222", wavy: "M182 216 Q191 208 200 216 T218 216",
+  };
+  if (shapes[mouth]) $(p + "-mouth").setAttribute("d", shapes[mouth]);
+  $(p + "-eyes").style.display = eyes === "X" ? "none" : "";
+  $(p + "-eyesX").style.display = eyes === "X" ? "" : "none";
+  $(p + "-eyes").setAttribute("transform", `translate(200,182) scale(${eyeScale}) translate(-200,-182)`);
+}
+
+let current = null;
+function enterScene(s) {
+  current = s.id;
+  $("bg").setAttribute("fill", s.bg);
+  const p = PROPS[s.id];
+  const isAnne = s.id === "anne";
+  $("char").style.display = isAnne ? "none" : "";
+  $("annep").style.display = isAnne ? "" : "none";
+  $("room").style.display = isAnne ? "" : "none";
+  $("peek").style.display = isAnne ? "" : "none";
+  $("dog").style.display = s.id === "pet" ? "" : "none";
+  $("girl").style.display = s.id === "mom" ? "" : "none";
+  $("printer").style.display = (s.id === "print" || s.id === "intro") ? "" : "none";
+  $("bubble").style.display = "none";
+  $("final").style.display = "none";
+  $("fx").innerHTML = "";
+  $("confetti").innerHTML = "";
+  if (p) {
+    $("b-extra").innerHTML = p.extra || "";
+    $("b-front").innerHTML = p.front || "";
+    $("b-torso").setAttribute("fill", p.shirt);
+    $("b-al").setAttribute("stroke", p.shirt);
+    $("b-ar").setAttribute("stroke", p.shirt);
+    $("b-bun").style.display = p.hideBun ? "none" : "";
+    setHands("b", p.hands[0], p.hands[1]);
+  }
+  $("char").dataset.x = { eng: 70, wood: 70, pet: 20, mom: 40, print: 0, intro: 0 }[s.id] ?? 70;
+  if (s.id === "print") $("printer").setAttribute("transform", "translate(310,560)");
+  if (s.id === "intro") $("printer").setAttribute("transform", "translate(355,680) scale(.72)");
+
+  const T = {
+    eng:   ["Kimine göre", "MÜHENDİS 👩‍💻"],
+    wood:  ["Kimine göre", "AHŞAP USTASI 🪵"],
+    pet:   ["Kimine göre", "PET KUAFÖR ✂️🐶"],
+    mom:   ["Kimine göre", "PRO MAX ANNE 📱"],
+    print: ["Ve şimdi…", "3D YAZICI işine girdim 🖨️✨"],
+    anne:  ["", "Anneme sorarsanız…"],
+    intro: ["", ""],
+  }[s.id];
+  $("title").innerHTML = T[1] ? `<span class="pill">${T[0] ? `<span class="small">${T[0]}</span>` : ""}${T[1]}</span>` : "";
+  $("sub").innerHTML = "";
+}
+
+const SUBS = {
+  eng:   [1.0, "Kod çalışıyor… neden çalıştığını bilmiyorum 🤷‍♀️"],
+  wood:  [3.0, "Ölçü: göz kararı 📐 Parmak: 9,5 🩹"],
+  pet:   [1.4, "Köpek: 10/10 ✨ · Ben: 2/10 🌪️"],
+  mom:   [1.2, "2 çocuk · 1 TB sabır · şarj hep %1 🔋"],
+  print: [3.6, "İlk baskım: 🍝 “Modern sanat” diyelim"],
+  anne:  [4.6, "*çay yudumu* ☕"],
+};
+
+const INTRO_LINES = [
+  [0.0, "Merhaba, ben <b>Begüm Ünlü</b> 👋"],
+  [1.9, "Bu hayatta neye elimi attıysam<br><b>kurdum</b> diyebiliriz."],
+  [4.0, "Şimdi de 3D yazıcıyla<br>bir şeyler kuruyorum 🖨️"],
+  [6.0, "Bakalım bu sefer<br>annem ne diyecek? 😅"],
+];
+
+// Basit, tekrarlanabilir rastgele sayı
+const rnd = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+function confetti(lt, n = 40) {
+  let d = "";
+  const cols = ["#fdcb6e", "#55efc4", "#74b9ff", "#ff7675", "#a29bfe", "#fff"];
+  for (let i = 0; i < n; i++) {
+    const y = ((lt * (120 + rnd(i) * 140) + rnd(i + 9) * 960) % 1000) - 30;
+    const x = rnd(i + 3) * 540 + Math.sin(lt * 3 + i) * 20;
+    const r = lt * 300 * (rnd(i + 5) - 0.5);
+    d += `<rect x="-6" y="-3" width="12" height="6" fill="${cols[i % cols.length]}" transform="translate(${x},${y}) rotate(${r})"/>`;
+  }
+  $("confetti").innerHTML = d;
+}
+
+function render(t) {
+  const s = SCENES.find(x => t >= x.start && t < x.end) || SCENES[SCENES.length - 1];
+  if (current !== s.id) enterScene(s);
+  const lt = t - s.start;
+
+  $("flash").style.opacity = s.start > 0 ? clamp(1 - lt / 0.22) * 0.85 : 0;
+  // Sahne girişinde hafif kamera sarsıntısı
+  const shake = clamp(1 - lt / 0.3) * 8;
+  $("stage").style.transform = "";
+  $("svg").style.transform = `translate(${Math.sin(lt * 90) * shake}px,${Math.cos(lt * 70) * shake}px)`;
+
+  $("title").style.transform = `scale(${pop(lt / 0.4)}) rotate(${Math.sin(t * 2.4) * 1.5}deg)`;
+  $("title").style.opacity = clamp(lt / 0.15);
+
+  const sub = SUBS[s.id];
+  if (sub && lt >= sub[0]) {
+    $("sub").innerHTML = `<span>${sub[1]}</span>`;
+    $("sub").style.transform = `translateY(${(1 - ease((lt - sub[0]) / 0.3)) * 30}px)`;
+    $("sub").style.opacity = clamp((lt - sub[0]) / 0.2);
+  } else { $("sub").innerHTML = ""; }
+  $("sub").style.top = s.id === "anne" ? "880px" : "230px";
+
+  // Karakter: girişte zıplama, müzikle sallanma
+  const cx = +($("char").dataset.x || 70);
+  const sc = pop(lt / 0.45);
+  const hop = bounce(t) * 10;
+  const sway = Math.sin(t * Math.PI / BEAT / 2) * 3;
+  let jumpY = 0, sq = 1;
+  if (s.id === "print" && lt < 3.2) { jumpY = -Math.abs(Math.sin(lt * 7)) * 40; sq = 1 + Math.abs(Math.cos(lt * 7)) * 0.04; }
+  if (s.id === "intro") { jumpY = -Math.abs(Math.sin(lt * 6.5)) * 22; }
+  $("char").setAttribute("transform",
+    `translate(${cx},${300 - hop + jumpY}) translate(200,575) rotate(${sway}) scale(${sc / sq},${sc * sq}) translate(-200,-575)`);
+  headTilt("b", Math.sin(t * Math.PI / BEAT) * 5);
+
+  const blink = (t % 3.1) < 0.12;
+  face("b", { eyeScale: blink ? 0.15 : 1 });
+  $("b-eyes").setAttribute("transform", `translate(0,182) scale(1,${blink ? 0.12 : 1}) translate(0,-182)`);
+
+  if (s.id === "eng") renderEng(lt);
+  if (s.id === "wood") renderWood(lt);
+  if (s.id === "pet") renderPet(lt);
+  if (s.id === "mom") renderMom(lt);
+  if (s.id === "print" || s.id === "intro") renderPrinter(s.id, lt);
+  if (s.id === "print") renderPrint(lt);
+  if (s.id === "anne") renderAnne(lt, t);
+  if (s.id === "intro") renderIntro(lt);
+}
+
+function renderEng(lt) {
+  document.querySelectorAll("#code rect").forEach((r, i) => {
+    r.setAttribute("width", +r.dataset.w * clamp((lt - 0.2 - i * 0.3) / 0.3));
+  });
+  const err = lt > 1.9 && lt < 2.9, ok = lt >= 3.1;
+  $("code").style.display = err || ok ? "none" : "";
+  $("screen").setAttribute("fill", err ? "#d63031" : ok ? "#00b894" : "#1e272e");
+  $("scrtxt").textContent = err ? (Math.floor(lt * 8) % 2 ? "HATA!" : "") : ok ? "✓ ÇALIŞTI" : "";
+  // Hata: laptop titrer, kafa sallar, yüz şaşkın; çalışınca omuz silker
+  const jit = err ? Math.sin(lt * 80) * 4 : 0;
+  $("laptop").setAttribute("transform", `translate(${jit},0)`);
+  if (err) { headTilt("b", Math.sin(lt * 30) * 10); face("b", { mouth: "O", eyeScale: 1.3 }); }
+  if (ok) {
+    const shrug = Math.sin(clamp((lt - 3.1) / 0.5) * Math.PI) * 18;
+    setHands("b", [126, 392 - shrug], [274, 392 - shrug]);
+    face("b", { mouth: "wavy" });
+    headTilt("b", 12);
+  }
+  $("qmarks").style.display = ok ? "" : "none";
+  $("qmarks").setAttribute("transform", `translate(0,${-((lt * 40) % 20)})`);
+  $("sweat").setAttribute("transform", `translate(0,${(lt * 30) % 40})`);
+  $("sweat").style.opacity = err ? 1 - ((lt * 30) % 40) / 40 : 0;
+}
+
+function renderWood(lt) {
+  // Üç çekiç darbesi: ikisi çiviye, üçüncüsü parmağa
+  const hits = [[0.9, [240, 345]], [1.6, [240, 345]], [2.4, [180, 388]]];
+  let k = 0, target = hits[0][1];
+  for (const [h, tg] of hits) {
+    const d = lt - h + 0.35;
+    if (d >= 0 && d < 0.6) { k = d < 0.35 ? d / 0.35 : 1 - (d - 0.35) / 0.25; target = tg; }
+  }
+  const ouch = lt >= 2.4;
+  const e = ease(k);
+  const hr = [300 + (target[0] - 300) * e, 250 + (target[1] - 250) * e];
+  const ang = -10 - 80 * e;
+  // Parmağa vurduktan sonra elini sallar
+  let hl = [96, 392];
+  if (ouch) {
+    const w = lt - 2.4;
+    hl = [96 + Math.sin(w * 30) * 18, 360 + Math.cos(w * 30) * 10 - 30 * clamp(w / 0.2)];
+  }
+  setHands("b", hl, hr);
+  $("hammer").setAttribute("transform", `translate(${hr[0]},${hr[1]}) rotate(${ang})`);
+  $("plank").setAttribute("transform", `rotate(${ouch ? -8 + Math.sin(lt * 12) * 3 * clamp(1 - (lt - 2.4)) : -8} 200 380)`);
+  const o = $("ouch");
+  o.style.display = ouch && lt < 3.6 ? "" : "none";
+  o.setAttribute("transform", `translate(${hl[0] - 96},${hl[1] - 392}) scale(${pop((lt - 2.4) / 0.3)})`);
+  if (ouch) {
+    face("b", lt < 3.4 ? { mouth: "O", eyes: "X" } : { mouth: "wavy" });
+    headTilt("b", lt < 3.4 ? Math.sin(lt * 40) * 6 : -6);
+  }
+  let d = "";
+  for (let i = 0; i < 14; i++) {
+    const y = ((lt * 90 + i * 37) % 160);
+    const x = 70 + (i * 53) % 260 + Math.sin(lt * 4 + i) * 6;
+    d += `<circle cx="${x}" cy="${400 + y}" r="${2 + (i % 3)}" fill="#c69c6d" opacity="${1 - y / 160}"/>`;
+  }
+  $("dust").innerHTML = d;
+}
+
+function renderPet(lt) {
+  // Fön karakterin kendi saçını uçuruyor; köpek mükemmel
+  const gust = Math.sin(lt * 22);
+  $("messy").setAttribute("transform", `translate(200,100) rotate(${gust * 7}) scale(${1 + 0.15 * Math.abs(gust)}) translate(-200,-100)`);
+  $("air").style.opacity = 0.5 + 0.5 * Math.sin(lt * 25);
+  $("dryer").setAttribute("transform", `translate(330,${288 + Math.sin(lt * 9) * 6}) rotate(${Math.sin(lt * 4) * 8})`);
+  setHands("b", [108, 392], [326, 296 + Math.sin(lt * 9) * 6]);
+  $("sparkles").style.opacity = 0.5 + 0.5 * Math.sin(lt * 6);
+  $("sparkles").setAttribute("transform", `scale(${1 + 0.08 * Math.sin(lt * 6)})`);
+  // 3. saniyede köpek silkinir, su ve tüyler karakterin üstüne
+  const shakeDog = lt > 2.8 && lt < 3.6;
+  $("dogbody").setAttribute("transform", shakeDog ? `rotate(${Math.sin(lt * 60) * 9} 70 90)` : "");
+  $("dog").setAttribute("transform", `translate(360,${690 - Math.abs(Math.sin(lt * 4)) * 6})`);
+  let drops = "";
+  if (lt > 2.8) {
+    for (let i = 0; i < 18; i++) {
+      const p = clamp((lt - 2.8 - rnd(i) * 0.4) / 0.6);
+      if (p <= 0 || p >= 1) continue;
+      const x = 20 - p * (180 + rnd(i + 1) * 120), y = 40 - Math.sin(p * Math.PI) * (80 + rnd(i + 2) * 80) + p * 60;
+      drops += i % 2
+        ? `<path d="M${x} ${y} q5 9 0 12 q-5 -3 0 -12z" fill="#74b9ff"/>`
+        : `<circle cx="${x}" cy="${y}" r="7" fill="#fff" stroke="#dfe6e9"/>`;
+    }
+  }
+  $("drops").innerHTML = drops;
+  if (lt > 3.3) { face("b", { mouth: "flat", eyeScale: 0.9 }); headTilt("b", -8); }
+  else face("b", { mouth: lt > 2.8 ? "O" : "smile" });
+  let tufts = "";
+  for (let i = 0; i < 6; i++) {
+    const p = (lt * 0.8 + rnd(i)) % 1;
+    tufts += `<circle cx="${180 + p * 160 * (rnd(i + 4) - 0.5) * 2}" cy="${60 - p * 90}" r="${5 + rnd(i) * 4}" fill="#4a2c1d" opacity="${1 - p}"/>`;
+  }
+  $("tufts").innerHTML = tufts;
+}
+
+function renderMom(lt) {
+  document.querySelectorAll("#orbit text").forEach((el, i) => {
+    const a = lt * 2.8 + i * (Math.PI * 2 / 5);
+    el.setAttribute("x", 200 + Math.cos(a) * 165 - 17);
+    el.setAttribute("y", 95 + Math.sin(a) * 55 + 12);
+  });
+  // Oğlum (2) kucakta kıpır kıpır, annesinin saçını çekiyor
+  const wig = Math.sin(lt * 10);
+  $("boy").setAttribute("transform", `rotate(${wig * 6} 90 400)`);
+  const pull = (Math.sin(lt * 5) + 1) / 2;
+  const bh = [122 + pull * 8, 262 - pull * 40];
+  $("boy-arm").setAttribute("x2", bh[0]); $("boy-arm").setAttribute("y2", bh[1]);
+  $("boy-hand").setAttribute("cx", bh[0]); $("boy-hand").setAttribute("cy", bh[1]);
+  $("b-bun").setAttribute("transform", `translate(${-pull * 10},${pull * 4})`);
+  $("boy-mouth").setAttribute("ry", 3 + Math.abs(wig) * 5);
+  headTilt("b", -pull * 8);
+  // Kızım (4) eteğimden çekiştiriyor, zıplıyor
+  const gx = 410, gy = 700 - Math.abs(Math.sin(lt * 8)) * 26;
+  $("girl").setAttribute("transform", `translate(${gx},${gy})`);
+  const tug = Math.sin(lt * 12) * 8;
+  $("girl-arm").setAttribute("x2", -62 + tug); $("girl-arm").setAttribute("y2", 0);
+  $("girl-hand").setAttribute("cx", -62 + tug); $("girl-hand").setAttribute("cy", 0);
+  $("girl-pig-l").setAttribute("transform", `rotate(${Math.sin(lt * 16) * 15} -30 -5)`);
+  $("girl-pig-r").setAttribute("transform", `rotate(${-Math.sin(lt * 16) * 15} 30 -5)`);
+  $("girl-mouth").setAttribute("ry", 3 + Math.abs(Math.sin(lt * 14)) * 6);
+  // Annem sakin ama göz seğiriyor
+  face("b", { mouth: "smile" });
+  const twitch = lt > 2 && Math.floor(lt * 12) % 5 === 0;
+  $("b-eyes").setAttribute("transform", twitch ? "translate(175,182) scale(1,.3) translate(-175,-182)" : "");
+  setHands("b", [118, 372], [300 + tug * 0.5, 400 + Math.abs(tug)]);
+  // "Anne!" balonları
+  const calls = [[0.4, 300, 640, "ANNE!"], [1.3, 40, 560, "MAMA!"], [2.1, 330, 600, "ANNE BAK!"], [2.9, 60, 600, "MAMAAA!"], [3.5, 300, 650, "ANNEEE!"]];
+  let fx = "";
+  for (const [st, x, y, w] of calls) {
+    const p = lt - st;
+    if (p < 0 || p > 0.9) continue;
+    const s = pop(p / 0.25), op = clamp((0.9 - p) / 0.2);
+    fx += `<g transform="translate(${x},${y - p * 30}) scale(${s})" opacity="${op}">
+      <rect x="0" y="-30" width="${w.length * 19 + 20}" height="44" rx="22" fill="#fff" stroke="#2d3436" stroke-width="3"/>
+      <text x="${(w.length * 19 + 20) / 2}" y="0" font-size="24" font-weight="800" text-anchor="middle" fill="#d63031">${w}</text></g>`;
+  }
+  $("fx").innerHTML = fx;
+}
+
+function renderPrint(lt) {
+  const spag = lt > 3.2;
+  if (!spag) {
+    face("b", { mouth: "big", eyeScale: 1.25 });
+    setHands("b", [150 + Math.sin(lt * 14) * 8, 320], [250 - Math.sin(lt * 14) * 8, 320]); // heyecandan alkış
+  } else if (lt < 3.8) {
+    face("b", { mouth: "O", eyeScale: 1.6 });
+    headTilt("b", 0, 6);
+    setHands("b", [150, 220], [250, 220]); // eller yüzde
+  } else {
+    face("b", { mouth: "big" });
+    headTilt("b", -10);
+    setHands("b", [120, 330], [345, 290 + Math.sin(lt * 6) * 8]); // gururla gösterir
+    let fx = "";
+    for (let i = 0; i < 4; i++) {
+      const a = lt * 2 + i * 1.6;
+      fx += `<text x="${415 + Math.cos(a) * 110}" y="${660 + Math.sin(a) * 60}" font-size="${26 + 6 * Math.sin(lt * 5 + i)}">✨</text>`;
+    }
+    $("fx").innerHTML = fx;
+  }
+  if (spag && lt < 3.8) {
+    $("fx").innerHTML = `<text x="250" y="560" font-size="70" transform="rotate(${Math.sin(lt * 30) * 10} 280 540)">❗</text>`;
+  }
+}
+
+function renderAnne(lt, t) {
+  $("title").innerHTML = `<span class="pill">Anneme sorarsanız…</span>`;
+  const b = $("bubble");
+  if (lt >= 1.5) {
+    const full = "Kızım sen hiçbir iş yapmadın ki.";
+    const n = Math.floor(clamp((lt - 1.5) / 1.6) * full.length);
+    b.style.display = "";
+    b.textContent = full.slice(0, Math.max(1, n));
+    $("title").style.opacity = 0;
+  }
+  const talking = lt > 1.5 && lt < 3.2;
+  const open = talking && Math.floor(lt * 10) % 2;
+  $("a-mouth").style.display = open ? "none" : "";
+  $("a-mouthO").style.display = open ? "" : "none";
+  // Annem kafasını yavaşça çevirip kameraya bakar
+  $("a-head").setAttribute("transform", `rotate(${lt < 1.4 ? -8 + lt * 6 : Math.sin(lt * 0.8) * 1.5} 200 245)`);
+  $("a-hairback").setAttribute("transform", $("a-head").getAttribute("transform"));
+  // Çay yudumu
+  const sip = clamp((lt - 4.3) / 0.4) - clamp((lt - 5.4) / 0.4);
+  $("tea").setAttribute("transform", `translate(${296 - sip * 70},${318 - sip * 110}) rotate(${-sip * 25})`);
+  setHands("a", [118, 378], [296 - sip * 70, 352 - sip * 110]);
+  $("steam").setAttribute("transform", `translate(0,${-(lt * 12 % 10)})`);
+  $("annep").setAttribute("transform", `translate(110,${300 + Math.sin(t * 2) * 2})`);
+  // Begüm kenardan umutla bakar, lafı duyunca yavaşça kaybolur
+  const inP = ease((lt - 0.3) / 0.5);
+  const outP = ease((lt - 3.6) / 1.4);
+  const sad = lt > 3.3;
+  $("peek-happy").style.display = sad ? "none" : "";
+  $("peek-sad").style.display = sad ? "" : "none";
+  const px = -70 + inP * 140 - outP * 60, py = 640 + outP * 260;
+  $("peek").setAttribute("transform", `translate(${px},${py}) rotate(${20 - inP * 10 + outP * 25})`);
+  if (lt > 3.3 && lt < 4.6) {
+    const p = (lt - 3.3) / 1.3;
+    $("fx").innerHTML = `<text x="${px + 40}" y="${py - 90 - p * 60}" font-size="48" opacity="${1 - p}">💔</text>`;
+  } else $("fx").innerHTML = "";
+}
+
+function renderIntro(lt) {
+  const wave = Math.sin(lt * 9) * 28;
+  setHands("b", [108, 378], [330 + wave * 0.4, 190 + Math.abs(wave) * 0.2]);
+  const talking = lt < 7.8 && Math.floor(lt * 7) % 2;
+  face("b", { mouth: talking ? "O" : "big" });
+  let line = INTRO_LINES[0];
+  for (const l of INTRO_LINES) if (lt >= l[0]) line = l;
+  $("title").innerHTML = `<span class="pill" style="font-size:30px;font-weight:700">${line[1]}</span>`;
+  const ll = lt - line[0];
+  $("title").style.transform = `scale(${pop(ll / 0.4)}) rotate(${Math.sin(lt * 2.4) * 1.5}deg)`;
+  $("title").style.opacity = clamp(ll / 0.15);
+  confetti(lt, 30);
+  const f = $("final");
+  if (lt >= 8) {
+    f.style.display = "flex";
+    f.style.opacity = clamp((lt - 8) / 0.3);
+    f.style.transform = `scale(${pop((lt - 8) / 0.5)})`;
+    f.querySelector(".cta").style.transform = `scale(${1 + 0.06 * bounce(lt)})`;
+    confetti(lt, 60);
+  } else f.style.display = "none";
+}
+
+function renderPrinter(mode, lt) {
+  const obj = $("pobj");
+  $("spool").setAttribute("transform", `rotate(${lt * 120} 105 -18)`);
+  $("pled").setAttribute("fill", Math.floor(lt * 4) % 2 ? "#00b894" : "#55efc4");
+  if (mode === "print") {
+    const prog = clamp((lt - 0.3) / 2.8);
+    const spag = lt > 3.2;
+    const layers = Math.floor(prog * 16);
+    let d = "";
+    if (!spag) {
+      for (let i = 0; i < layers; i++) {
+        const w = 60 + Math.sin(i / 15 * Math.PI) * 50;
+        d += `<rect x="${105 - w / 2}" y="${232 - i * 9}" width="${w}" height="8" rx="3" fill="${i % 2 ? "#e17055" : "#fab1a0"}"/>`;
+      }
+    }
+    obj.innerHTML = d;
+    $("pspag").style.display = spag ? "" : "none";
+    const ny = spag ? 50 : 226 - layers * 9;
+    const nx = spag ? 105 + Math.sin(lt * 3) * 10 : 105 + Math.sin(lt * 14) * 55;
+    $("pnozzle").setAttribute("transform", `translate(${nx},${ny - 6})`);
+    $("pgantry").setAttribute("y", ny - 10);
+    $("pstring").setAttribute("transform", `translate(${Math.sin(lt * 5) * 6},0)`);
+    $("printer").setAttribute("transform", `translate(310,${560 + (spag && lt < 3.6 ? Math.sin(lt * 70) * 4 : 0)})`);
+  } else {
+    // Tanıtımda: bu sefer düzgün bir kalp basıyor
+    $("pspag").style.display = "none";
+    const prog = clamp(lt / 7);
+    const layers = Math.floor(prog * 14);
+    let d = "";
+    for (let i = 0; i < layers; i++) {
+      const y = i / 13;
+      const w = y < 0.7 ? 20 + y / 0.7 * 120 : 140 - (y - 0.7) / 0.3 * 40;
+      if (y > 0.82) {
+        d += `<rect x="45" y="${232 - i * 10}" width="50" height="9" rx="4" fill="#e84393"/>`;
+        d += `<rect x="115" y="${232 - i * 10}" width="50" height="9" rx="4" fill="#e84393"/>`;
+      } else d += `<rect x="${105 - w / 2}" y="${232 - i * 10}" width="${w}" height="9" rx="4" fill="#e84393"/>`;
+    }
+    obj.innerHTML = d;
+    const ny = 226 - layers * 10;
+    $("pnozzle").setAttribute("transform", `translate(${105 + Math.sin(lt * 12) * 45},${ny - 6})`);
+    $("pgantry").setAttribute("y", ny - 10);
+  }
+}
+
+window.render = render;
+window.DURATION = DURATION;
+// Tarayıcıda açılınca canlı oynat
+if (!location.hash.includes("capture")) {
+  const t0 = performance.now();
+  (function loop() { render(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })();
+} else render(0);
+</script>
+</body>
+</html>
