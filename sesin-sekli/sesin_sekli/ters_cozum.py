@@ -19,7 +19,6 @@ from .akustik import formantlar
 
 N_KESIT = 36
 N_KATSAYI = 6
-A_NOTR = 3.0e-4      # 3 cm² nötr ses yolu kesiti
 A_MIN = 0.35e-4      # basılabilirlik: en dar kanal çapı ~6.7 mm
 A_MAX = 9.0e-4       # en geniş: ~34 mm çap
 L_MIN, L_MAX = 0.11, 0.21
@@ -38,17 +37,30 @@ class Sonuc:
         return 100 * (self.elde - self.hedef) / self.hedef
 
 
-def alan_fonksiyonu(katsayilar: np.ndarray, boyun_kesit: int, boyun_alan: float) -> np.ndarray:
+def alan_fonksiyonu(katsayilar: np.ndarray, boyun_kesit: int, boyun_alan: float,
+                    a_min: float = A_MIN, a_max: float = A_MAX) -> np.ndarray:
     x = (np.arange(N_KESIT) + 0.5) / N_KESIT
-    log_a = np.log(A_NOTR) + sum(c * np.cos(np.pi * (k + 1) * x) for k, c in enumerate(katsayilar))
-    a = np.clip(np.exp(log_a), A_MIN, A_MAX)
+    a_notr = np.sqrt(a_min * a_max)
+    log_a = np.log(a_notr) + sum(c * np.cos(np.pi * (k + 1) * x) for k, c in enumerate(katsayilar))
+    a = np.clip(np.exp(log_a), a_min, a_max)
     a[:boyun_kesit] = boyun_alan
     return a
 
 
+# Kolye: kanal en fazla ~13 mm; /a/ ve /i/ için dar-geniş oranı (≈16x alan) korunur.
+KOLYE_CAP_MM = (3.2, 12.8)
+
+
 def ters_coz(hedef_formantlar, boyun_mm: float = 12.0, boyun_cap_mm: float = 9.0,
-             tohum: int = 0, iterasyon: int = 120) -> Sonuc:
-    """hedef_formantlar: F1..Fn (Hz). Boyun: kaynağın takıldığı sabit çaplı giriş."""
+             tohum: int = 0, iterasyon: int = 120, cap_mm: tuple | None = None) -> Sonuc:
+    """hedef_formantlar: F1..Fn (Hz). Boyun: kaynağın takıldığı sabit çaplı giriş.
+
+    cap_mm: (en dar, en geniş) kanal iç çapı; verilmezse düz tüp sınırları.
+    """
+    if cap_mm is None:
+        a_min, a_max = A_MIN, A_MAX
+    else:
+        a_min, a_max = (np.pi * (c / 2000) ** 2 for c in cap_mm)
     hedef = np.asarray(hedef_formantlar, dtype=float)
     n = len(hedef)
     boyun_alan = np.pi * (boyun_cap_mm / 2000) ** 2
@@ -60,7 +72,7 @@ def ters_coz(hedef_formantlar, boyun_mm: float = 12.0, boyun_cap_mm: float = 9.0
     def maliyet(p):
         L, kats = p[0], p[1:]
         bk = boyun_sayisi(L)
-        a = alan_fonksiyonu(kats, bk, boyun_alan)
+        a = alan_fonksiyonu(kats, bk, boyun_alan, a_min, a_max)
         f = formantlar(a, L, adet=n)
         if np.any(np.isnan(f)):
             return 10.0
@@ -72,5 +84,5 @@ def ters_coz(hedef_formantlar, boyun_mm: float = 12.0, boyun_cap_mm: float = 9.0
                                popsize=18, tol=1e-8, polish=True)
     L, kats = r.x[0], r.x[1:]
     bk = boyun_sayisi(L)
-    a = alan_fonksiyonu(kats, bk, boyun_alan)
+    a = alan_fonksiyonu(kats, bk, boyun_alan, a_min, a_max)
     return Sonuc(alanlar=a, uzunluk=L, hedef=hedef, elde=formantlar(a, L, adet=n), boyun_kesit=bk)

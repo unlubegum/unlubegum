@@ -3,6 +3,7 @@
 Kullanım:
   python3 -m sesin_sekli tasarla --wav kayit.wav -o cikti/
   python3 -m sesin_sekli tasarla --unlu a -o cikti_a/
+  python3 -m sesin_sekli tasarla --wav kayit.wav --kolye -o kolye/   (madalyon + gırtlak)
   python3 -m sesin_sekli tasarla --formant 730,1090,2440 -o cikti/
   python3 -m sesin_sekli olc --wav baski_kaydi.wav --tasarim cikti/
   python3 -m sesin_sekli vizilti -o vizilti.wav
@@ -20,7 +21,7 @@ from .formant import formant_cikar, wav_oku
 from .geometri import (baski_profili, en_buyuk_sarkma_derece, isaretli_hacim,
                        profil_formantlari, profil_svg, stl_yaz, tup_ucgenleri)
 from .sentez import sesli_harf, vizilti, wav_yaz
-from .ters_cozum import ters_coz
+from .ters_cozum import KOLYE_CAP_MM, ters_coz
 
 # Yaklaşık yetişkin erkek ortalamaları (F1, F2, F3) Hz. Gerçek kişi için --wav kullanın.
 UNLULER = {
@@ -50,7 +51,11 @@ def tasarla(a):
 
     print(f"Hedef formantlar ({kaynak}): {np.round(hedef).astype(int).tolist()} Hz")
     print("Şekil aranıyor (≈30-60 sn)...")
-    s = ters_coz(hedef, boyun_mm=a.boyun_mm, boyun_cap_mm=a.boyun_cap_mm, tohum=a.tohum)
+    if a.kolye:
+        # kolyede kanal dar tutulur; gırtlak ağzı 6 mm
+        s = ters_coz(hedef, boyun_mm=a.boyun_mm, boyun_cap_mm=6.0, tohum=a.tohum, cap_mm=KOLYE_CAP_MM)
+    else:
+        s = ters_coz(hedef, boyun_mm=a.boyun_mm, boyun_cap_mm=a.boyun_cap_mm, tohum=a.tohum)
 
     z, r = baski_profili(s.alanlar, s.uzunluk)
     baski_f = profil_formantlari(z, r, adet=len(hedef))
@@ -71,11 +76,13 @@ def tasarla(a):
         "uzunluk_mm": round(s.uzunluk * 1000, 1),
         "dis_cap_mm": round(2 * (float(r.max()) + a.duvar_mm), 1),
         "en_dar_kanal_cap_mm": round(2 * float(r.min()), 1),
-        "boyun": {"uzunluk_mm": a.boyun_mm, "ic_cap_mm": a.boyun_cap_mm},
+        "boyun": {"uzunluk_mm": a.boyun_mm, "ic_cap_mm": 6.0 if a.kolye else a.boyun_cap_mm},
         "duvar_mm": a.duvar_mm,
         "malzeme_hacmi_cm3": round(isaretli_hacim(tri) / 1000, 1),
         "en_buyuk_ic_sarkma_derece": round(en_buyuk_sarkma_derece(z, r), 1),
     }
+    if a.kolye:
+        rapor["kolye"] = _kolye_yaz(yol("kolye.stl"), z, r)
     with open(yol("rapor.json"), "w", encoding="utf-8") as f:
         json.dump(rapor, f, ensure_ascii=False, indent=2)
 
@@ -88,7 +95,20 @@ def tasarla(a):
     sarkma = rapor["en_buyuk_ic_sarkma_derece"]
     print(f"İç kanal en dik sarkma: {sarkma}° " + ("(destek gerekmez)" if sarkma <= 45 else
           "(UYARI: 45° üstü; reçine veya ikiye bölerek basın)"))
-    print(f"Çıktılar: {a.cikti}/  (ses_yolu.stl, onizleme.wav, profil.svg, profil.csv, rapor.json)")
+    if a.kolye:
+        k = rapor["kolye"]
+        print(f"Kolye: çap {k['madalyon_cap_mm']} mm · kalınlık {k['kalinlik_mm']} mm · "
+              f"{k['spiral_tur']} tur spiral · gırtlak haznesi Ø{k['hazne_dis_cap_mm']} mm")
+    dosyalar = "kolye.stl, " if a.kolye else ""
+    print(f"Çıktılar: {a.cikti}/  ({dosyalar}ses_yolu.stl, onizleme.wav, profil.svg, profil.csv, rapor.json)")
+
+
+def _kolye_yaz(yol, z, r):
+    from .kolye import kolye_yap, manifold_stl_yaz
+    kolye, bilgi = kolye_yap(z, r)
+    manifold_stl_yaz(yol, kolye)
+    bilgi["malzeme_hacmi_cm3"] = round(kolye.volume() / 1000, 1)
+    return {k: (float(v) if isinstance(v, np.floating) else v) for k, v in bilgi.items()}
 
 
 def olc(a):
@@ -112,6 +132,10 @@ def olc(a):
     yeni = os.path.join(a.tasarim, "ses_yolu_duzeltilmis.stl")
     stl_yaz(yeni, tup_ucgenleri(z, r, duvar_mm=rapor["duvar_mm"]))
     print(f"Uzunluğu {z[-1]:.1f} mm yapan düzeltilmiş model: {yeni}")
+    if "kolye" in rapor:
+        yeni_k = os.path.join(a.tasarim, "kolye_duzeltilmis.stl")
+        _kolye_yaz(yeni_k, z, r)
+        print(f"Düzeltilmiş kolye: {yeni_k}")
 
 
 def main(argv=None):
@@ -130,6 +154,8 @@ def main(argv=None):
     t.add_argument("--boyun-cap-mm", type=float, default=9.0, help="giriş iç çapı")
     t.add_argument("--f0", type=float, default=120.0, help="önizleme perdesi (Hz)")
     t.add_argument("--tohum", type=int, default=0)
+    t.add_argument("--kolye", action="store_true",
+                   help="kanalı madalyona spiral sar, gırtlak (balon zarlı) ağızlık ekle")
     t.set_defaults(fn=tasarla)
 
     o = alt.add_parser("olc", help="basılan tüpün kaydını hedefle karşılaştır, gerekirse düzelt")

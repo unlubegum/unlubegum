@@ -1,0 +1,49 @@
+{
+  "kaynak": "/a/ (ortalama değerler)",
+  "hedef_hz": [
+    730.0,
+    1090.0,
+    2440.0
+  ],
+  "model_hz": [
+    729.7,
+    1090.3,
+    2440.2
+  ],
+  "baski_profili_hz": [
+    731.2,
+    1093.7,
+    2444.3
+  ],
+  "uzunluk_mm": 164.5,
+  "dis_cap_mm": 16.9,
+  "en_dar_kanal_cap_mm": 3.2,
+  "boyun": {
+    "uzunluk_mm": 12.0,
+    "ic_cap_mm": 6.0
+  },
+  "duvar_mm": 2.4,
+  "malzeme_hacmi_cm3": 29.1,
+  "en_buyuk_ic_sarkma_derece": 10.6,
+  "kolye": {
+    "madalyon_cap_mm": 64.9,
+    "kalinlik_mm": 19.0,
+    "spiral_tur": 1.1,
+    "duz_kisim_mm": 37.4,
+    "spiral_mm": 117.3,
+    "agiz_deligi_mm": 9.9,
+    "kanal_agzi_cap_mm": 6.0,
+    "hazne_dis_cap_mm": 18.2,
+    "ayar": {
+      "duvar": 1.6,
+      "tur_arasi": 1.8,
+      "kenar": 2.4,
+      "hazne_uzunluk": 11.0,
+      "hazne_aralik": 2.2,
+      "dudak_cikinti": 0.8,
+      "dilim": 40,
+      "adim": 0.6
+    },
+    "malzeme_hacmi_cm3": 59.4
+  }
+}

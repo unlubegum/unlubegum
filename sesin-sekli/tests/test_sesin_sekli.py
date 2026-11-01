@@ -51,6 +51,24 @@ def test_stl_su_gecirmez_ve_baski_tutarli():
     assert isaretli_hacim(tri) > 0
 
 
+def test_kolye_kati_ve_kanal_uzunlugu():
+    from sesin_sekli.kolye import damla_kesit, _alan, kolye_yap
+    from sesin_sekli.ters_cozum import KOLYE_CAP_MM
+
+    for t in (0.0, 0.5, 1.0):  # damla kesit alanı daireyle aynı kalmalı
+        assert abs(_alan(damla_kesit(3.0, t, 64)) / (np.pi * 9) - 1) < 1e-9
+
+    s = ters_coz([730, 1090, 2440], boyun_cap_mm=6.0, iterasyon=60, cap_mm=KOLYE_CAP_MM)
+    assert np.all(np.abs(s.hata_yuzde) < 1.5), s.elde
+    z, r = baski_profili(s.alanlar, s.uzunluk)
+    kolye, bilgi = kolye_yap(z, r)
+    assert kolye.status().name == "NoError" and kolye.volume() > 0
+    # kanal + hava halkası/üfleme borusu + ip halkası = 3 delik; kanal hazneye karışmamalı
+    assert kolye.genus() == 3
+    toplam = bilgi["duz_kisim_mm"] + bilgi["spiral_mm"] + bilgi["agiz_deligi_mm"]
+    assert abs(toplam - z[-1]) < 1.5, (toplam, z[-1])
+
+
 if __name__ == "__main__":
     for ad, fn in list(globals().items()):
         if ad.startswith("test_"):

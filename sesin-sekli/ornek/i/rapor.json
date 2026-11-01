@@ -7,22 +7,22 @@
   ],
   "model_hz": [
     270.0,
-    2289.3,
-    3010.7
+    2289.8,
+    3009.7
   ],
   "baski_profili_hz": [
-    272.9,
-    2306.0,
-    3047.8
+    270.9,
+    2292.8,
+    3016.0
   ],
-  "uzunluk_mm": 166.0,
-  "dis_cap_mm": 38.7,
-  "en_dar_kanal_cap_mm": 6.7,
+  "uzunluk_mm": 167.6,
+  "dis_cap_mm": 33.7,
+  "en_dar_kanal_cap_mm": 7.3,
   "boyun": {
     "uzunluk_mm": 12.0,
     "ic_cap_mm": 9.0
   },
   "duvar_mm": 2.4,
-  "malzeme_hacmi_cm3": 135.0,
-  "en_buyuk_ic_sarkma_derece": 31.6
+  "malzeme_hacmi_cm3": 109.5,
+  "en_buyuk_ic_sarkma_derece": 13.6
 }
