@@ -1,0 +1,28 @@
+{
+  "kaynak": "/i/ (ortalama değerler)",
+  "hedef_hz": [
+    270.0,
+    2290.0,
+    3010.0
+  ],
+  "model_hz": [
+    270.0,
+    2289.8,
+    3009.7
+  ],
+  "baski_profili_hz": [
+    270.9,
+    2292.8,
+    3016.0
+  ],
+  "uzunluk_mm": 167.6,
+  "dis_cap_mm": 33.7,
+  "en_dar_kanal_cap_mm": 7.3,
+  "boyun": {
+    "uzunluk_mm": 12.0,
+    "ic_cap_mm": 9.0
+  },
+  "duvar_mm": 2.4,
+  "malzeme_hacmi_cm3": 109.5,
+  "en_buyuk_ic_sarkma_derece": 13.6
+}
