@@ -69,7 +69,7 @@ def cname(c):
     return min(NAMES, key=lambda k: np.sum((np.array(NAMES[k]) - c) ** 2))
 
 UP = 2
-SC = 3  # kaynak goruntu buyutme carpani
+SC = 4  # kaynak goruntu buyutme carpani
 def mask_to_geom(m, mmpx, smooth=1.2):
     """binary mask (rows=y down) -> shapely geometry in mm (y up)."""
     m8 = (m.astype(np.uint8) * 255)
@@ -93,7 +93,7 @@ def mask_to_geom(m, mmpx, smooth=1.2):
             j = hier[j][0]
         pg = Polygon(tp(c), holes).buffer(0)
         if not pg.is_empty: polys.append(pg)
-    g = unary_union(polys).simplify(0.025)
+    g = unary_union(polys).simplify(0.015)
     return g
 
 def polys(g):
@@ -120,7 +120,7 @@ def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=O
     mmpx = size_mm / (hpx if along == 'h' else wpx)
     # --- ayrinti icin 3x buyut + kenar koruyan yumusatma ---
     img = cv2.resize(img, (wpx * SC, hpx * SC), interpolation=cv2.INTER_CUBIC)
-    img = cv2.bilateralFilter(img, 7, 25, 5)
+    img = cv2.bilateralFilter(img, 5, 15, 3)
     m = cv2.resize(cv2.GaussianBlur(m.astype(np.uint8) * 255, (3, 3), 0), (wpx * SC, hpx * SC),
                    interpolation=cv2.INTER_LINEAR) > 127
     hpx, wpx = m.shape
@@ -135,7 +135,6 @@ def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=O
     cc = km.cluster_centers_.copy(); cc[:, 0] /= 1.3
     cent = cv2.cvtColor(cc.reshape(1, -1, 3).astype(np.uint8), cv2.COLOR_LAB2RGB)[0].astype(int)
     lbl = np.where(m, lbl, 255).astype(np.uint8)
-    lbl = cv2.medianBlur(lbl, 3)
     lbl = np.where(m, lbl, 255)
     base_c = int(np.argmax(cent.sum(1)))  # en acik renk = govde (beyaz)
     dark_c = int(np.argmin(cent.sum(1)))
@@ -168,13 +167,12 @@ def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=O
     inner = sil.buffer(-0.2)
     # koyu renk -> daha yuksek kabartma (tek renk baskida da detay gorunur)
     order = [c for c in np.argsort(cent.sum(1))[::-1] if c != base_c]
-    heights = {c: BASE_T + 0.4 + 0.2 * r for r, c in enumerate(order)}
+    heights = {c: BASE_T + 0.4 + 0.15 * r for r, c in enumerate(order)}
     for ci in order:
         rm = (lbl == ci)
-        rm = cv2.morphologyEx(rm.astype(np.uint8), cv2.MORPH_OPEN, np.ones((2, 2), np.uint8)).astype(bool)
-        g = mask_to_geom(rm, mmpx, smooth=0.7).intersection(inner).buffer(-0.02)
+        g = mask_to_geom(rm, mmpx, smooth=0.45).intersection(inner).buffer(-0.02)
         top = heights[ci]
-        mesh = extrude(g, BASE_T, top, min_area=0.15)
+        mesh = extrude(g, BASE_T, top, min_area=0.06)
         if mesh is not None:
             parts.append((f'Renk{len(parts)}_' + cname(cent[ci]).replace('/', '-').replace(' ', ''), cent[ci], mesh))
 
@@ -194,7 +192,7 @@ def write_3mf(path, name, parts):
     mats = ''.join(f'<base name="{pn}" displaycolor="{hexc(c)}"/>' for pn, c, _ in parts)
     for i, (pn, c, mesh) in enumerate(parts):
         mesh.merge_vertices()
-        v = '\n'.join(f'<vertex x="{a:.4f}" y="{b:.4f}" z="{cc:.4f}"/>' for a, b, cc in mesh.vertices)
+        v = '\n'.join(f'<vertex x="{a:.3f}" y="{b:.3f}" z="{cc:.2f}"/>' for a, b, cc in mesh.vertices)
         t = '\n'.join(f'<triangle v1="{a}" v2="{b}" v3="{cc}"/>' for a, b, cc in mesh.faces)
         objs.append(f'<object id="{i+2}" type="model" name="{pn}" pid="1" pindex="{i}"><mesh><vertices>\n{v}\n</vertices><triangles>\n{t}\n</triangles></mesh></object>')
     comps = ''.join(f'<component objectid="{i+2}"/>' for i in range(len(parts)))
@@ -237,18 +235,18 @@ def box_comp(MM, y0, y1, x0, x1):
 if __name__ == '__main__':
     only = sys.argv[2:] 
     jobs = [
-        ('01_Elsa_HappyBirthday', lambda: comp_at(200, 200), 130, 'w', 8, 2, 7.0),
-        ('02_Buz_Sato', lambda: comp_at(640, 500), 150, 'h', 8, 2, 7.0),
-        ('03_Elsa', lambda: comp_at(80, 700), 130, 'h', 8, 1, 7.0),
-        ('04_Anna', lambda: comp_at(80, 1100), 120, 'h', 8, 1, 7.0),
-        ('05_Olaf', lambda: comp_at(320, 1250), 85, 'h', 7, 1, 7.0),
-        ('06_Kristoff_Sven', lambda: comp_at(500, 1000), 150, 'w', 8, 2, 7.0),
-        ('07_Kar_Tanesi_1', lambda: box_comp(M, 0, 180, 755, 954), 45, 'h', 5, 1, 12.0),
-        ('08_Kar_Tanesi_2', lambda: box_comp(M, 165, 345, 795, 954), 45, 'h', 5, 1, 12.0),
-        ('09_Kar_Tanesi_3', lambda: box_comp(M, 420, 600, 180, 340), 45, 'h', 5, 1, 12.0),
-        ('10_Kar_Tanesi_4', lambda: box_comp(M, 878, 1025, 194, 328), 40, 'h', 5, 1, 12.0),
-        ('11_Kar_Tanesi_5', lambda: box_comp(M0, 790, 975, 580, 742), 45, 'h', 5, 1, 12.0),
-        ('12_Kar_Tanesi_6', lambda: box_comp(M, 1178, 1330, 796, 932), 40, 'h', 5, 1, 12.0),
+        ('01_Elsa_HappyBirthday', lambda: comp_at(200, 200), 130, 'w', 12, 2, 7.0),
+        ('02_Buz_Sato', lambda: comp_at(640, 500), 150, 'h', 12, 2, 7.0),
+        ('03_Elsa', lambda: comp_at(80, 700), 130, 'h', 12, 1, 7.0),
+        ('04_Anna', lambda: comp_at(80, 1100), 120, 'h', 12, 1, 7.0),
+        ('05_Olaf', lambda: comp_at(320, 1250), 85, 'h', 10, 1, 7.0),
+        ('06_Kristoff_Sven', lambda: comp_at(500, 1000), 150, 'w', 12, 2, 7.0),
+        ('07_Kar_Tanesi_1', lambda: box_comp(M, 0, 180, 755, 954), 45, 'h', 7, 1, 12.0),
+        ('08_Kar_Tanesi_2', lambda: box_comp(M, 165, 345, 795, 954), 45, 'h', 7, 1, 12.0),
+        ('09_Kar_Tanesi_3', lambda: box_comp(M, 420, 600, 180, 340), 45, 'h', 7, 1, 12.0),
+        ('10_Kar_Tanesi_4', lambda: box_comp(M, 878, 1025, 194, 328), 40, 'h', 7, 1, 12.0),
+        ('11_Kar_Tanesi_5', lambda: box_comp(M0, 790, 975, 580, 742), 45, 'h', 7, 1, 12.0),
+        ('12_Kar_Tanesi_6', lambda: box_comp(M, 1178, 1330, 796, 932), 40, 'h', 7, 1, 12.0),
     ]
     for nm, mf, sz, al, k, st, ins in jobs:
         if only and not any(o in nm for o in only): continue
