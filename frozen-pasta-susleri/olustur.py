@@ -69,7 +69,7 @@ def cname(c):
     return min(NAMES, key=lambda k: np.sum((np.array(NAMES[k]) - c) ** 2))
 
 UP = 2
-SC = 4  # kaynak goruntu buyutme carpani
+SC = 3  # kaynak goruntu buyutme carpani
 def mask_to_geom(m, mmpx, smooth=1.2):
     """binary mask (rows=y down) -> shapely geometry in mm (y up)."""
     m8 = (m.astype(np.uint8) * 255)
@@ -93,7 +93,7 @@ def mask_to_geom(m, mmpx, smooth=1.2):
             j = hier[j][0]
         pg = Polygon(tp(c), holes).buffer(0)
         if not pg.is_empty: polys.append(pg)
-    g = unary_union(polys).simplify(0.015)
+    g = unary_union(polys).simplify(0.05)
     return g
 
 def polys(g):
@@ -110,7 +110,7 @@ def extrude(g, z0, z1, min_area=0.6):
         ms.append(t)
     return trimesh.util.concatenate(ms) if ms else None
 
-def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=OUT):
+def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=OUT, palette=None):
     m = fill_holes(largest(m))
     ys, xs = np.where(m)
     y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
@@ -126,17 +126,43 @@ def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=O
     hpx, wpx = m.shape
     mmpx /= SC
 
-    # ---- renk kumeleme ----
+    # ---- filament paletine gore renk atama ----
+    img = cv2.medianBlur(img, 5)
     lab = cv2.cvtColor(img, cv2.COLOR_RGB2LAB).reshape(-1, 3).astype(float)
     sel = m.reshape(-1)
-    lab[:, 0] *= 1.3  # acik/koyu farkini guclendir
-    km = KMeans(n_clusters=k, n_init=8, random_state=0).fit(lab[sel][::7])
-    lbl = km.predict(lab).reshape(hpx, wpx)
-    cc = km.cluster_centers_.copy(); cc[:, 0] /= 1.3
-    cent = cv2.cvtColor(cc.reshape(1, -1, 3).astype(np.uint8), cv2.COLOR_LAB2RGB)[0].astype(int)
+    cat_lab = cv2.cvtColor(CAT_RGB.reshape(1, -1, 3).astype(np.uint8), cv2.COLOR_RGB2LAB)[0].astype(float)
+    W_ = np.array([1.0, 1.3, 1.3]); lab = lab * W_; cat_lab = cat_lab * W_  # renk tonu daha onemli
+    smp = lab[sel][::max(1, sel.sum() // 30000)]
+    D = np.sqrt(((smp[:, None, :] - cat_lab[None, :, :]) ** 2).sum(2))  # (N, catalog)
+    from itertools import combinations
+    best = None
+    for combo in combinations(range(1, len(CAT)), k - 1):
+        idx = (0,) + combo
+        err = D[:, idx].min(1).mean()
+        if best is None or err < best[0]: best = (err, idx)
+    pal = list(best[1])
+    if palette:
+        names_ = [c[0] for c in CAT]
+        pal = [names_.index(p) for p in palette]; k = len(pal)
+    dl = np.sqrt(((lab[:, None, :] - cat_lab[None, pal, :]) ** 2).sum(2))
+    lbl = dl.argmin(1).reshape(hpx, wpx).astype(np.uint8)
     lbl = np.where(m, lbl, 255).astype(np.uint8)
+    # minik adaciklari komsu renge kat (basitlestirme)
+    from scipy import ndimage
+    min_px = int(MIN_ISLAND_MM2 / (mmpx * mmpx))
+    for _ in range(2):
+        bad = np.zeros_like(m)
+        for ci in range(k):
+            n_, l_, st_, _ = cv2.connectedComponentsWithStats((lbl == ci).astype(np.uint8), connectivity=4)
+            small = np.where(st_[1:, 4] < min_px)[0] + 1
+            bad |= np.isin(l_, small)
+        good = m & ~bad
+        _, (iy, ix) = ndimage.distance_transform_edt(~good, return_indices=True)
+        lbl = np.where(bad, lbl[iy, ix], lbl)
     lbl = np.where(m, lbl, 255)
-    base_c = int(np.argmax(cent.sum(1)))  # en acik renk = govde (beyaz)
+    cent = CAT_RGB[pal].astype(int)
+    pal_names = [CAT[i][0] for i in pal]
+    base_c = 0
     dark_c = int(np.argmin(cent.sum(1)))
 
     # ---- govde silueti + cubuk ----
@@ -162,19 +188,17 @@ def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=O
         stake_geoms.append(sg)
     body = unary_union([sil] + stake_geoms).buffer(0)
 
-    parts = [('Govde_' + cname(cent[base_c]).replace('/', '-').replace(' ', ''), cent[base_c],
-              extrude(body, 0, BASE_T))]
+    parts = [('F1_Govde_' + pal_names[0], cent[0], extrude(body, 0, BASE_T), 1)]
     inner = sil.buffer(-0.2)
-    # koyu renk -> daha yuksek kabartma (tek renk baskida da detay gorunur)
     order = [c for c in np.argsort(cent.sum(1))[::-1] if c != base_c]
-    heights = {c: BASE_T + 0.4 + 0.15 * r for r, c in enumerate(order)}
-    for ci in order:
+    heights = {c: BASE_T + 0.4 + 0.2 * r for r, c in enumerate(order)}
+    for ci in range(1, k):
         rm = (lbl == ci)
-        g = mask_to_geom(rm, mmpx, smooth=0.45).intersection(inner).buffer(-0.02)
-        top = heights[ci]
-        mesh = extrude(g, BASE_T, top, min_area=0.06)
+        g = mask_to_geom(rm, mmpx, smooth=0.9).intersection(inner).buffer(-0.02)
+        mesh = extrude(g, BASE_T, heights[ci], min_area=0.4)
         if mesh is not None:
-            parts.append((f'Renk{len(parts)}_' + cname(cent[ci]).replace('/', '-').replace(' ', ''), cent[ci], mesh))
+            parts.append((f'F{ci+1}_' + pal_names[ci], cent[ci], mesh, ci + 1))
+    PALETTES[name] = [(pal_names[i], CAT[pal[i]][1]) for i in range(k)]
 
     # Orta noktaya tasi (x ortala, y>=0)
     allb = trimesh.util.concatenate([p[2] for p in parts]).bounds
@@ -186,42 +210,73 @@ def build(name, m, size_mm, along='h', k=4, stakes=1, stake_inset=7.0, out_dir=O
     print(f'{name}: {sz[0]:.0f} x {sz[1]:.0f} x {sz[2]:.1f} mm, parcalar:',
           [(p[0], p[2].is_watertight) for p in parts])
 
+CAT = [('Beyaz', 'FFFFFF'), ('Siyah', '1A1A1A'), ('Koyu Gri', '545454'), ('Gri', '8E9089'),
+       ('Buz Mavisi', 'A8D8EA'), ('Turkuaz', '1E9BB0'), ('Camgobegi', '0086D6'), ('Mavi', '1F4FB0'),
+       ('Lacivert', '1A2550'), ('Mor', '5E43B7'), ('Lila', 'C8B8E8'), ('Fusya', 'B0186E'),
+       ('Bordo', '6E1A33'), ('Ten-Bej', 'F2D2B8'), ('Kahverengi', '7B4A2E'), ('Koyu Kahve', '3E2A20'),
+       ('Turuncu', 'FF6A13'), ('Kirmizi', 'C12E1F'), ('Sari', 'F4D35E')]
+CAT_RGB = np.array([[int(h[i:i+2], 16) for i in (0, 2, 4)] for _, h in CAT])
+MIN_ISLAND_MM2 = 0.8
+PALETTES = {}
+
 def write_3mf(path, name, parts):
+    """Tek nesne, tek mesh; her parca bir 'volume' (ucgen araligi) + extruder atamasi.
+    PrusaSlicer / OrcaSlicer / Bambu Studio parcalari ve filament numaralarini okur."""
     def hexc(c): return '#%02X%02X%02XFF' % tuple(int(v) for v in c)
-    objs = []
-    mats = ''.join(f'<base name="{pn}" displaycolor="{hexc(c)}"/>' for pn, c, _ in parts)
-    for i, (pn, c, mesh) in enumerate(parts):
+    mats = ''.join(f'<base name="{pn}" displaycolor="{hexc(c)}"/>' for pn, c, _m, _e in parts)
+    vs, ts, vols = [], [], []
+    voff = toff = 0
+    for i, (pn, c, mesh, ext) in enumerate(parts):
         mesh.merge_vertices()
-        v = '\n'.join(f'<vertex x="{a:.3f}" y="{b:.3f}" z="{cc:.2f}"/>' for a, b, cc in mesh.vertices)
-        t = '\n'.join(f'<triangle v1="{a}" v2="{b}" v3="{cc}"/>' for a, b, cc in mesh.faces)
-        objs.append(f'<object id="{i+2}" type="model" name="{pn}" pid="1" pindex="{i}"><mesh><vertices>\n{v}\n</vertices><triangles>\n{t}\n</triangles></mesh></object>')
-    comps = ''.join(f'<component objectid="{i+2}"/>' for i in range(len(parts)))
-    cid = len(parts) + 2
+        vs.append('\n'.join(f'<vertex x="{a:.3f}" y="{b:.3f}" z="{cc:.3f}"/>' for a, b, cc in mesh.vertices))
+        f = mesh.faces + voff
+        ts.append('\n'.join(f'<triangle v1="{a}" v2="{b}" v3="{cc}" pid="1" p1="{i}"/>' for a, b, cc in f))
+        vols.append((toff, toff + len(f) - 1, pn, ext))
+        voff += len(mesh.vertices); toff += len(f)
     model = f'''<?xml version="1.0" encoding="UTF-8"?>
-<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">
 <metadata name="Title">{name}</metadata>
+<metadata name="slic3rpe:Version3mf">1</metadata>
 <resources>
 <basematerials id="1">{mats}</basematerials>
-{''.join(objs)}
-<object id="{cid}" type="model" name="{name}"><components>{comps}</components></object>
+<object id="2" type="model" name="{name}" pid="1" pindex="0"><mesh><vertices>
+{chr(10).join(vs)}
+</vertices><triangles>
+{chr(10).join(ts)}
+</triangles></mesh></object>
 </resources>
-<build><item objectid="{cid}" transform="1 0 0 0 1 0 0 0 1 120 120 0"/></build>
+<build><item objectid="2" transform="1 0 0 0 1 0 0 0 1 120 120 0" printable="1"/></build>
 </model>'''
+    vol_xml = ''.join(f'''  <volume firstid="{a}" lastid="{b}">
+   <metadata type="volume" key="name" value="{pn}"/>
+   <metadata type="volume" key="volume_type" value="ModelPart"/>
+   <metadata type="volume" key="extruder" value="{e}"/>
+  </volume>
+''' for a, b, pn, e in vols)
+    prusa_cfg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<config>
+ <object id="2" instances_count="1">
+  <metadata type="object" key="name" value="{name}"/>
+  <metadata type="object" key="extruder" value="1"/>
+{vol_xml} </object>
+</config>
+'''
     ct = '''<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>'''
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/><Default Extension="config" ContentType="text/xml"/><Default Extension="png" ContentType="image/png"/></Types>'''
     rels = '''<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>'''
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('[Content_Types].xml', ct)
         z.writestr('_rels/.rels', rels)
         z.writestr('3D/3dmodel.model', model)
+        z.writestr('Metadata/Slic3r_PE_model.config', prusa_cfg)
 
 def preview(path, parts):
     allm = trimesh.util.concatenate([p[2] for p in parts])
     (x0, y0, _), (x1, y1, _) = allm.bounds
     s = 6
     img = np.full((int((y1 - y0) * s) + 20, int((x1 - x0) * s) + 20, 3), 40, np.uint8)
-    for pn, c, mesh in sorted(parts, key=lambda p: p[2].bounds[1][2]):
+    for pn, c, mesh, _e in sorted(parts, key=lambda p: p[2].bounds[1][2]):
         for f in mesh.faces[mesh.face_normals[:, 2] > 0.9]:
             pts = mesh.vertices[f][:, :2]
             pts = np.stack([(pts[:, 0] - x0) * s + 10, (y1 - pts[:, 1]) * s + 10], 1).astype(np.int32)
@@ -234,20 +289,21 @@ def box_comp(MM, y0, y1, x0, x1):
 
 if __name__ == '__main__':
     only = sys.argv[2:] 
+    SF = ['Beyaz', 'Buz Mavisi', 'Lila']
     jobs = [
-        ('01_Elsa_HappyBirthday', lambda: comp_at(200, 200), 130, 'w', 12, 2, 7.0),
-        ('02_Buz_Sato', lambda: comp_at(640, 500), 150, 'h', 12, 2, 7.0),
-        ('03_Elsa', lambda: comp_at(80, 700), 130, 'h', 12, 1, 7.0),
-        ('04_Anna', lambda: comp_at(80, 1100), 120, 'h', 12, 1, 7.0),
-        ('05_Olaf', lambda: comp_at(320, 1250), 85, 'h', 10, 1, 7.0),
-        ('06_Kristoff_Sven', lambda: comp_at(500, 1000), 150, 'w', 12, 2, 7.0),
-        ('07_Kar_Tanesi_1', lambda: box_comp(M, 0, 180, 755, 954), 45, 'h', 7, 1, 12.0),
-        ('08_Kar_Tanesi_2', lambda: box_comp(M, 165, 345, 795, 954), 45, 'h', 7, 1, 12.0),
-        ('09_Kar_Tanesi_3', lambda: box_comp(M, 420, 600, 180, 340), 45, 'h', 7, 1, 12.0),
-        ('10_Kar_Tanesi_4', lambda: box_comp(M, 878, 1025, 194, 328), 40, 'h', 7, 1, 12.0),
-        ('11_Kar_Tanesi_5', lambda: box_comp(M0, 790, 975, 580, 742), 45, 'h', 7, 1, 12.0),
-        ('12_Kar_Tanesi_6', lambda: box_comp(M, 1178, 1330, 796, 932), 40, 'h', 7, 1, 12.0),
+        ('01_Elsa_HappyBirthday', lambda: comp_at(200, 200), 130, 'w', ['Beyaz', 'Turkuaz', 'Ten-Bej', 'Lacivert'], 2, 7.0),
+        ('02_Buz_Sato', lambda: comp_at(640, 500), 150, 'h', ['Beyaz', 'Buz Mavisi', 'Turkuaz', 'Lacivert'], 2, 7.0),
+        ('03_Elsa', lambda: comp_at(80, 700), 130, 'h', ['Beyaz', 'Buz Mavisi', 'Turkuaz', 'Lacivert'], 1, 7.0),
+        ('04_Anna', lambda: comp_at(80, 1100), 120, 'h', ['Beyaz', 'Bordo', 'Mavi', 'Siyah'], 1, 7.0),
+        ('05_Olaf', lambda: comp_at(320, 1250), 85, 'h', ['Beyaz', 'Siyah', 'Turuncu', 'Koyu Kahve'], 1, 7.0),
+        ('06_Kristoff_Sven', lambda: comp_at(500, 1000), 150, 'w', ['Beyaz', 'Koyu Gri', 'Kahverengi', 'Ten-Bej'], 2, 7.0),
+        ('07_Kar_Tanesi_1', lambda: box_comp(M, 0, 180, 755, 954), 45, 'h', SF, 1, 12.0),
+        ('08_Kar_Tanesi_2', lambda: box_comp(M, 165, 345, 795, 954), 45, 'h', SF, 1, 12.0),
+        ('09_Kar_Tanesi_3', lambda: box_comp(M, 420, 600, 180, 340), 45, 'h', SF, 1, 12.0),
+        ('10_Kar_Tanesi_4', lambda: box_comp(M, 878, 1025, 194, 328), 40, 'h', SF, 1, 12.0),
+        ('11_Kar_Tanesi_5', lambda: box_comp(M0, 790, 975, 580, 742), 45, 'h', SF, 1, 12.0),
+        ('12_Kar_Tanesi_6', lambda: box_comp(M, 1178, 1330, 796, 932), 40, 'h', SF, 1, 12.0),
     ]
-    for nm, mf, sz, al, k, st, ins in jobs:
+    for nm, mf, sz, al, pl, st, ins in jobs:
         if only and not any(o in nm for o in only): continue
-        build(nm, mf(), sz, along=al, k=k, stakes=st, stake_inset=ins)
+        build(nm, mf(), sz, along=al, k=len(pl), stakes=st, stake_inset=ins, palette=pl)
